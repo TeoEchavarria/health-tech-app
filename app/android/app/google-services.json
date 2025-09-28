@@ -1,29 +1,29 @@
 {
-    "project_info": {
-      "project_number": "1047860968893",
-      "project_id": "hcgateway-fcm",
-      "storage_bucket": "hcgateway-fcm.appspot.com"
-    },
-    "client": [
-      {
-        "client_info": {
-          "mobilesdk_app_id": "1:1047860968893:android:6fdf29797dda6c99dde6d4",
-          "android_client_info": {
-            "package_name": "dev.shuchir.hcgateway"
-          }
-        },
-        "oauth_client": [],
-        "api_key": [
-          {
-            "current_key": "AIzaSyDFy0mrwlLwAXUmhQqjsUg8PHDtIuiSgzI"
-          }
-        ],
-        "services": {
-          "appinvite_service": {
-            "other_platform_oauth_client": []
-          }
+  "project_info": {
+    "project_number": "1084232407815",
+    "project_id": "health-tech-med",
+    "storage_bucket": "health-tech-med.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1084232407815:android:51b546d322bdcd1c0c43a2",
+        "android_client_info": {
+          "package_name": "com.echavarrias.hcgateway"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAiPb-z4IIZQcdiqGpo1YisCbfItxbfF78"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
         }
       }
-    ],
-    "configuration_version": "1"
-  }
+    }
+  ],
+  "configuration_version": "1"
+}
