@@ -1,8 +1,10 @@
 import sentry_sdk
-from flask import Flask
-from flask_cors import CORS
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
+import uvicorn
+
 load_dotenv()
 
 try:
@@ -10,16 +12,28 @@ try:
         dsn=os.environ['SENTRY_DSN'],
         traces_sample_rate=1.0,
     )
-except: pass
+except Exception: 
+    pass
 
-app = Flask(__name__)
-CORS(app)
+app = FastAPI(title="HC Gateway API", version="2.0.0")
 
-# deprecate v1 for security reasons
-# from apiVersions.v1 import init_app as init_v1
-# init_v1(app)
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure this based on your needs
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-from apiVersions.v2 import init_app as init_v2
-init_v2(app)
+# Include routes
+from routes import include_all_internal_routers
+include_all_internal_routers(app)
 
-app.run(host=os.environ.get('APP_HOST', '0.0.0.0'), port=int(os.environ.get('APP_PORT', 6644)), debug=bool(os.environ.get('APP_DEBUG', False)))
+if __name__ == "__main__":
+    uvicorn.run(
+        app,
+        host=os.environ.get('APP_HOST', '0.0.0.0'),
+        port=int(os.environ.get('APP_PORT', 6644)),
+        reload=bool(os.environ.get('APP_DEBUG', False))
+    )
