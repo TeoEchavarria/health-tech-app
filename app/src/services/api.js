@@ -1,5 +1,6 @@
 // API client for communicating with the backend server
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import config from '../../config';
 
 // Create axios instance with base configuration
@@ -11,8 +12,60 @@ export const apiClient = axios.create({
   }
 });
 
+// Token refresh state management
+let isRefreshing = false;
+let refreshSubscribers = [];
+
+function subscribeTokenRefresh(cb) {
+  refreshSubscribers.push(cb);
+}
+
+function onRefreshed(token) {
+  refreshSubscribers.forEach(cb => cb(token));
+  refreshSubscribers = [];
+}
+
+/**
+ * Get stored tokens from AsyncStorage
+ */
+async function getStoredTokens() {
+  try {
+    const accessToken = await AsyncStorage.getItem('login');
+    const refreshToken = await AsyncStorage.getItem('refreshToken');
+    return { accessToken, refreshToken };
+  } catch (error) {
+    console.error('Error reading tokens from storage:', error);
+    return { accessToken: null, refreshToken: null };
+  }
+}
+
+/**
+ * Save tokens to AsyncStorage
+ */
+async function saveTokens(accessToken, refreshToken) {
+  try {
+    if (accessToken) await AsyncStorage.setItem('login', accessToken);
+    if (refreshToken) await AsyncStorage.setItem('refreshToken', refreshToken);
+  } catch (error) {
+    console.error('Error saving tokens to storage:', error);
+  }
+}
+
+/**
+ * Clear tokens from AsyncStorage
+ */
+async function clearTokens() {
+  try {
+    await AsyncStorage.removeItem('login');
+    await AsyncStorage.removeItem('refreshToken');
+  } catch (error) {
+    console.error('Error clearing tokens:', error);
+  }
+}
+
 /**
  * Set the authentication token for all requests
+ * @deprecated Use interceptor instead - kept for backward compatibility
  */
 export function setAuthToken(token) {
   if (token) {
@@ -20,6 +73,69 @@ export function setAuthToken(token) {
   } else {
     delete apiClient.defaults.headers.common['Authorization'];
   }
+}
+
+// ============================================
+// REQUEST INTERCEPTOR - Inject Bearer Token
+// ============================================
+apiClient.interceptors.request.use(
+  async (config) => {
+    // Skip token injection for login/refresh endpoints
+    if (config.url?.includes('/login') || config.url?.includes('/refresh')) {
+      return config;
+    }
+
+    const { accessToken } = await getStoredTokens();
+    if (accessToken) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${accessToken}`;
+    }
+    
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+/**
+ * Set up session from login response
+ * Normalizes token field names and saves to storage
+ */
+export async function setAuthFromLogin(loginResponse) {
+  // Backend returns { token, refresh } - normalize to accessToken/refreshToken
+  const accessToken = loginResponse.token || loginResponse.access;
+  const refreshToken = loginResponse.refresh || loginResponse.refreshToken;
+  
+  if (!accessToken || !refreshToken) {
+    throw new Error('Login response missing tokens');
+  }
+  
+  await saveTokens(accessToken, refreshToken);
+  
+  // Also set default header for backward compatibility
+  apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+  
+  console.log('✅ Session tokens saved and configured');
+  
+  return { accessToken, refreshToken };
+}
+
+/**
+ * Clear session and remove auth header
+ */
+export async function clearSession() {
+  await clearTokens();
+  delete apiClient.defaults.headers.common['Authorization'];
+  console.log('🔓 Session cleared');
+}
+
+/**
+ * Set global auth error handler (called when refresh fails)
+ * Use this to navigate to login screen or show error
+ */
+export function setAuthErrorHandler(handler) {
+  global.authErrorHandler = handler;
 }
 
 /**
@@ -74,20 +190,112 @@ export async function checkHealth() {
   return response.data;
 }
 
-// Add response interceptor for error handling
+// ============================================
+// RESPONSE INTERCEPTOR - Auto-refresh on 401/403
+// ============================================
 apiClient.interceptors.response.use(
   response => response,
-  error => {
+  async (error) => {
+    const originalRequest = error.config;
+    
+    // Check if this is an invalid token error
+    const status = error.response?.status;
+    const bodyMsg = (error.response?.data?.detail || error.response?.data?.message || '').toString().toLowerCase();
+    const isInvalidToken = 
+      status === 401 || 
+      (status === 403 && bodyMsg.includes('invalid token'));
+
+    // Only retry once per request
+    if (isInvalidToken && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      // If already refreshing, queue this request
+      if (isRefreshing) {
+        return new Promise((resolve) => {
+          subscribeTokenRefresh((newToken) => {
+            originalRequest.headers = originalRequest.headers || {};
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            resolve(apiClient(originalRequest));
+          });
+        });
+      }
+
+      isRefreshing = true;
+
+      try {
+        console.log('🔄 Token expired, attempting refresh...');
+        const { refreshToken: storedRefreshToken } = await getStoredTokens();
+        
+        if (!storedRefreshToken) {
+          console.error('❌ No refresh token available');
+          isRefreshing = false;
+          await clearTokens();
+          return Promise.reject(new Error('No refresh token available'));
+        }
+
+        // Call refresh endpoint directly (bypass interceptor)
+        const { data } = await axios.post(
+          `${config.apiBaseUrl}/refresh`,
+          { refresh: storedRefreshToken },
+          { timeout: 10000 }
+        );
+
+        // Backend returns { token, refresh } (not { access, refresh })
+        const newAccessToken = data.token || data.access;
+        const newRefreshToken = data.refresh || storedRefreshToken;
+
+        if (!newAccessToken) {
+          throw new Error('Refresh response missing access token');
+        }
+
+        console.log('✅ Token refreshed successfully');
+        
+        // Save new tokens
+        await saveTokens(newAccessToken, newRefreshToken);
+        
+        // Update default header (for backward compatibility)
+        apiClient.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
+        
+        // Notify queued requests
+        onRefreshed(newAccessToken);
+        
+        isRefreshing = false;
+
+        // Retry the original request with new token
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        return apiClient(originalRequest);
+
+      } catch (refreshError) {
+        console.error('❌ Token refresh failed:', refreshError.message);
+        isRefreshing = false;
+        
+        // Clear tokens and notify queued requests of failure
+        await clearTokens();
+        refreshSubscribers.forEach(cb => cb(null));
+        refreshSubscribers = [];
+        
+        // Emit event for app to handle (navigate to login, show error, etc.)
+        if (global.authErrorHandler) {
+          global.authErrorHandler(refreshError);
+        }
+        
+        return Promise.reject(refreshError);
+      }
+    }
+
+    // Handle other errors
     if (error.response) {
-      // Server responded with error status
-      console.error('API Error:', error.response.status, error.response.data);
+      // Don't log tokens or sensitive data
+      const sanitizedData = { ...error.response.data };
+      if (sanitizedData.token) sanitizedData.token = '[REDACTED]';
+      if (sanitizedData.refresh) sanitizedData.refresh = '[REDACTED]';
+      console.error('API Error:', error.response.status, sanitizedData);
     } else if (error.request) {
-      // Request made but no response
       console.error('Network Error:', error.message);
     } else {
-      // Something else happened
       console.error('Error:', error.message);
     }
+    
     return Promise.reject(error);
   }
 );

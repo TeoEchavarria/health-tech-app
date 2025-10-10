@@ -155,7 +155,7 @@ export default function DashboardView({ navigation, onNavigateToSettings }) {
         </View>
       </View>
 
-      {/* Metrics Grid */}
+      {/* Metrics List */}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
@@ -167,12 +167,12 @@ export default function DashboardView({ navigation, onNavigateToSettings }) {
         }
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.grid}>
+        <View style={styles.metricsList}>
           {METRICS.map((metric) => (
             <ChartCard
               key={metric.key}
               title={metric.title}
-              width="48%"
+              width="100%"
               data={dataMap[metric.key] || []}
               metricKey={metric.key}
             />
@@ -261,12 +261,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
   },
   scrollContent: {
-    padding: 12,
+    padding: 16,
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+  metricsList: {
+    gap: 12,
   },
   settingsButton: {
     backgroundColor: '#FFFFFF',

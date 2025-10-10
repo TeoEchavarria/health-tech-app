@@ -2,7 +2,15 @@
 // Handles reading from Health Connect and syncing to server
 
 import { apiClient } from './api';
-import { readRecords, readRecord, initialize, RECORD_TYPES } from '../native/healthConnect';
+import { 
+  readRecords, 
+  readRecord, 
+  initialize, 
+  RECORD_TYPES,
+  getAllPermissions,
+  checkPermissions,
+  requestPermissionsIfNeeded 
+} from '../native/healthConnect';
 import { EventEmitter } from '../utils/eventBus';
 import { sleep } from '../utils/sleep';
 import { isoStartOfToday, isoNow, isoDaysAgo } from '../utils/dateHelpers';
@@ -70,16 +78,34 @@ export async function fetchTodayForTypes(types) {
  * @param {string} options.endTime - Optional custom end time
  * @param {string} options.authToken - Authentication token
  * @param {function} options.onProgress - Progress callback
+ * @param {boolean} options.skipPermissionCheck - Skip permission check (default: false)
  * @returns {Promise<Object>} Sync result with total count
  */
 export async function syncAll({
   startTime,
   endTime,
   authToken,
-  onProgress
+  onProgress,
+  skipPermissionCheck = false
 } = {}) {
   try {
     await initialize();
+    
+    // Check permissions before syncing (unless explicitly skipped)
+    if (!skipPermissionCheck) {
+      const allPermissions = getAllPermissions();
+      const { allGranted, missing } = await checkPermissions(allPermissions);
+      
+      if (!allGranted) {
+        const error = new Error(
+          `Missing ${missing.length} permissions. Please grant all permissions before syncing.`
+        );
+        error.missingPermissions = missing;
+        throw error;
+      }
+      
+      console.log('✅ All permissions verified, starting sync...');
+    }
     
     const currentTime = isoNow();
     const from = startTime || isoDaysAgo(29); // Default to last 29 days

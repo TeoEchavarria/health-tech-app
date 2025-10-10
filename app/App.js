@@ -9,6 +9,11 @@ import {
   insertRecords,
   deleteRecordsByUuids
 } from 'react-native-health-connect';
+import { 
+  isHealthConnectAvailable, 
+  openHealthConnectInstallPage, 
+  getAllPermissions 
+} from './src/native/healthConnect';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 import axios from 'axios';
@@ -22,7 +27,7 @@ import config from './config';
 
 // Import new modular services and components
 import { syncAll } from './src/services/healthSync';
-import { setAuthToken } from './src/services/api';
+import { setAuthToken, setAuthFromLogin, clearSession, setAuthErrorHandler } from './src/services/api';
 import { EventEmitter } from './src/utils/eventBus';
 import DashboardView from './src/screens/DashboardView';
 
@@ -125,126 +130,85 @@ get('fullSyncMode')
 })
 
 const askForPermissions = async () => {
-  await initialize();
+  try {
+    // Check if Health Connect is available
+    const { available } = await isHealthConnectAvailable();
+    
+    if (!available) {
+      Toast.show({
+        type: 'error',
+        text1: "Health Connect Not Available",
+        text2: "Tap to install Health Connect from Play Store.",
+        onPress: () => openHealthConnectInstallPage(),
+        visibilityTime: 6000
+      });
+      return;
+    }
 
-  const grantedPermissions = await requestPermission([
-    { accessType: 'read', recordType: 'ActiveCaloriesBurned' },
-    { accessType: 'read', recordType: 'BasalBodyTemperature' },
-    { accessType: 'read', recordType: 'BloodGlucose' },
-    { accessType: 'read', recordType: 'BloodPressure' },
-    { accessType: 'read', recordType: 'BasalMetabolicRate' },
-    { accessType: 'read', recordType: 'BodyFat' },
-    { accessType: 'read', recordType: 'BodyTemperature' },
-    { accessType: 'read', recordType: 'BoneMass' },
-    { accessType: 'read', recordType: 'CyclingPedalingCadence' },
-    { accessType: 'read', recordType: 'CervicalMucus' },
-    { accessType: 'read', recordType: 'ExerciseSession' },
-    { accessType: 'read', recordType: 'Distance' },
-    { accessType: 'read', recordType: 'ElevationGained' },
-    { accessType: 'read', recordType: 'FloorsClimbed' },
-    { accessType: 'read', recordType: 'HeartRate' },
-    { accessType: 'read', recordType: 'Height' },
-    { accessType: 'read', recordType: 'Hydration' },
-    { accessType: 'read', recordType: 'LeanBodyMass' },
-    { accessType: 'read', recordType: 'MenstruationFlow' },
-    { accessType: 'read', recordType: 'MenstruationPeriod' },
-    { accessType: 'read', recordType: 'Nutrition' },
-    { accessType: 'read', recordType: 'OvulationTest' },
-    { accessType: 'read', recordType: 'OxygenSaturation' },
-    { accessType: 'read', recordType: 'Power' },
-    { accessType: 'read', recordType: 'RespiratoryRate' },
-    { accessType: 'read', recordType: 'RestingHeartRate' },
-    { accessType: 'read', recordType: 'SleepSession' },
-    { accessType: 'read', recordType: 'Speed' },
-    { accessType: 'read', recordType: 'Steps' },
-    { accessType: 'read', recordType: 'StepsCadence' },
-    { accessType: 'read', recordType: 'TotalCaloriesBurned' },
-    { accessType: 'read', recordType: 'Vo2Max' },
-    { accessType: 'read', recordType: 'Weight' },
-    { accessType: 'read', recordType: 'WheelchairPushes' },
-    { accessType: 'write', recordType: 'ActiveCaloriesBurned' },
-    { accessType: 'write', recordType: 'BasalBodyTemperature' },
-    { accessType: 'write', recordType: 'BloodGlucose' },
-    { accessType: 'write', recordType: 'BloodPressure' },
-    { accessType: 'write', recordType: 'BasalMetabolicRate' },
-    { accessType: 'write', recordType: 'BodyFat' },
-    { accessType: 'write', recordType: 'BodyTemperature' },
-    { accessType: 'write', recordType: 'BoneMass' },
-    { accessType: 'write', recordType: 'CyclingPedalingCadence' },
-    { accessType: 'write', recordType: 'CervicalMucus' },
-    { accessType: 'write', recordType: 'ExerciseSession' },
-    { accessType: 'write', recordType: 'Distance' },
-    { accessType: 'write', recordType: 'ElevationGained' },
-    { accessType: 'write', recordType: 'FloorsClimbed' },
-    { accessType: 'write', recordType: 'HeartRate' },
-    { accessType: 'write', recordType: 'Height' },
-    { accessType: 'write', recordType: 'Hydration' },
-    { accessType: 'write', recordType: 'LeanBodyMass' },
-    { accessType: 'write', recordType: 'MenstruationFlow' },
-    { accessType: 'write', recordType: 'MenstruationPeriod' },
-    { accessType: 'write', recordType: 'Nutrition' },
-    { accessType: 'write', recordType: 'OvulationTest' },
-    { accessType: 'write', recordType: 'OxygenSaturation' },
-    { accessType: 'write', recordType: 'Power' },
-    { accessType: 'write', recordType: 'RespiratoryRate' },
-    { accessType: 'write', recordType: 'RestingHeartRate' },
-    { accessType: 'write', recordType: 'SleepSession' },
-    { accessType: 'write', recordType: 'Speed' },
-    { accessType: 'write', recordType: 'Steps' },
-    { accessType: 'write', recordType: 'StepsCadence' },
-    { accessType: 'write', recordType: 'TotalCaloriesBurned' },
-    { accessType: 'write', recordType: 'Vo2Max' },
-    { accessType: 'write', recordType: 'Weight' },
-    { accessType: 'write', recordType: 'WheelchairPushes' },
-  ]);
+    // Initialize Health Connect
+    await initialize();
 
-  console.log(grantedPermissions);
+    // Request all permissions using the helper function
+    const allPermissions = getAllPermissions();
+    const grantedPermissions = await requestPermission(allPermissions);
 
-  if (grantedPermissions.length < 68) {
+    console.log('Granted permissions:', grantedPermissions);
+
+    // Check if all permissions were granted
+    if (grantedPermissions.length < allPermissions.length) {
+      Toast.show({
+        type: 'warning',
+        text1: "Some Permissions Not Granted",
+        text2: `${grantedPermissions.length}/${allPermissions.length} permissions granted. Please visit settings to grant all permissions.`,
+        visibilityTime: 6000
+      });
+    } else {
+      Toast.show({
+        type: 'success',
+        text1: "All Permissions Granted",
+        text2: "You can now sync your health data.",
+        visibilityTime: 3000
+      });
+    }
+  } catch (error) {
+    console.error('Error requesting permissions:', error);
     Toast.show({
       type: 'error',
-      text1: "Permissions not granted",
-      text2: "Please visit settings to grant all permissions."
-    })
+      text1: "Permission Request Failed",
+      text2: error.message || "An error occurred while requesting permissions."
+    });
   }
 };
 
+/**
+ * Manual token refresh function
+ * NOTE: This is now OPTIONAL - the Axios interceptor automatically refreshes
+ * tokens on 401/403 "invalid token" errors. This function can be kept for
+ * proactive refresh, but is no longer required for the app to work.
+ */
 const refreshTokenFunc = async () => {
   let refreshToken = await get('refreshToken');
   if (!refreshToken) return;
   try {
+    // This uses the API client which will auto-inject the current token
     let response = await axios.post(`${apiBase}/refresh`, {
       refresh: refreshToken
     });
     if ('token' in response.data) {
-      console.log(response.data);
-      await setPlain('login', response.data.token)
+      console.log('🔄 Manual token refresh successful');
+      await setAuthFromLogin(response.data);
       login = response.data.token;
-      await setPlain('refreshToken', response.data.refresh);
-      Toast.show({
-        type: 'success',
-        text1: "Token refreshed successfully",
-      })
+      // Toast removed to avoid spam since refresh happens automatically
     }
     else {
-      Toast.show({
-        type: 'error',
-        text1: "Token refresh failed",
-        text2: response.data.error
-      })
+      console.warn('⚠️ Manual token refresh failed - missing token in response');
       login = null;
       delkey('login');
     }
   }
-
   catch (err) {
-    Toast.show({
-      type: 'error',
-      text1: "Token refresh failed",
-      text2: err.message
-    })
-    login = null;
-    delkey('login');
+    console.error('❌ Manual token refresh error:', err.message);
+    // Don't clear session here - let the interceptor handle it
   }
 }
 
@@ -493,13 +457,13 @@ export default Sentry.wrap(function App() {
     console.log('Response status:', response.status);
     
     if ('token' in response.data) {
-      console.log('Login successful! Token received:', response.data.token);
-      await setPlain('login', response.data.token);
-      login = response.data.token;
-      await setPlain('refreshToken', response.data.refresh);
+      console.log('Login successful! Token received');
       
-      // Set auth token for API client
-      setAuthToken(response.data.token);
+      // ✅ Use new helper to normalize and save tokens
+      await setAuthFromLogin(response.data);
+      
+      // Backward compatibility - keep global login variable
+      login = response.data.token;
       
       if (form.username) {
         setUsername(form.username);
@@ -609,6 +573,23 @@ export default Sentry.wrap(function App() {
     };
   }, [login]);
 
+  // Set up auth error handler (called when token refresh fails)
+  React.useEffect(() => {
+    setAuthErrorHandler((error) => {
+      console.error('🚨 Authentication failed:', error.message);
+      Toast.show({
+        type: 'error',
+        text1: 'Session Expired',
+        text2: 'Please log in again.',
+        visibilityTime: 5000
+      });
+      // Clear session and return to login
+      setCurrentView('login');
+      login = null;
+      forceUpdate();
+    });
+  }, []);
+
   React.useEffect(() => {
     requestNotifications(['alert']).then(({status, settings}) => {
       console.log(status, settings)
@@ -618,7 +599,8 @@ export default Sentry.wrap(function App() {
     .then(res => {
       if (res) {
         login = res;
-        // Set auth token for API client
+        // ✅ Token will be auto-injected by interceptor
+        // Still set for backward compatibility
         setAuthToken(res);
         setCurrentView('dashboard'); // Go to dashboard when already logged in
         
