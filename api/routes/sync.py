@@ -1,16 +1,69 @@
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
+from pydantic import BaseModel, validator
+from typing import List, Dict, Any, Optional, Literal
 from config import settings
 from bson.errors import InvalidId
-import base64
-from cryptography.fernet import Fernet
 import json
 import os
 import pymongo
 from pyfcm import FCMNotification
 import datetime
 from .login import verify_token
+
+# Canonical record types - Single source of truth
+# Must match the canonical list in app/src/types/recordTypes.js
+VALID_RECORD_TYPES = [
+    "activeCaloriesBurned",
+    "basalBodyTemperature",
+    "basalMetabolicRate",
+    "bloodGlucose",
+    "bloodPressure",
+    "bodyFat",
+    "bodyTemperature",
+    "boneMass",
+    "cervicalMucus",
+    "distance",
+    "exerciseSession",
+    "elevationGained",
+    "floorsClimbed",
+    "heartRate",
+    "height",
+    "hydration",
+    "leanBodyMass",
+    "menstruationFlow",
+    "menstruationPeriod",
+    "nutrition",
+    "ovulationTest",
+    "oxygenSaturation",
+    "power",
+    "respiratoryRate",
+    "restingHeartRate",
+    "sleepSession",
+    "speed",
+    "steps",
+    "stepsCadence",
+    "totalCaloriesBurned",
+    "vo2Max",
+    "weight",
+    "wheelchairPushes",
+]
+
+def validate_record_type(record_type: str) -> str:
+    """
+    Validate that the record type is in the canonical allow-list.
+    Accepts both camelCase (canonical) and PascalCase (Health Connect format).
+    Returns the camelCase version.
+    """
+    # Convert to camelCase if it's PascalCase
+    camel_case = record_type[0].lower() + record_type[1:] if record_type else record_type
+    
+    if camel_case not in VALID_RECORD_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid record type: '{record_type}'. Must be one of: {', '.join(VALID_RECORD_TYPES)}"
+        )
+    
+    return camel_case
 
 mongo = pymongo.MongoClient(settings.MONGO_URI)
 
@@ -36,7 +89,9 @@ class SuccessResponse(BaseModel):
 @router.post("/{method}", response_model=SuccessResponse)
 def sync(method: str, request: SyncRequest, user_id: str = Depends(verify_token)):
     print(request.dict())
-    method = method[0].lower() + method[1:]
+    
+    # Validate and normalize the record type
+    method = validate_record_type(method)
     
     data = request.data
     if not isinstance(data, list):
@@ -54,11 +109,8 @@ def sync(method: str, request: SyncRequest, user_id: str = Depends(verify_token)
         raise HTTPException(status_code=400, detail='invalid user id')
 
     print(user)
-    hashed_password = user['password']
-    key = base64.urlsafe_b64encode(hashed_password.encode("utf-8").ljust(32)[:32])
-    fernet = Fernet(key)
 
-    db = mongo['hacking-health_'+userid]
+    db = mongo['hh_'+userid]
     collection = db[method]
     
     for item in data:
@@ -75,15 +127,12 @@ def sync(method: str, request: SyncRequest, user_id: str = Depends(verify_token)
             starttime = item['startTime']
             endtime = item['endTime']
 
-        toencrypt = json.dumps(dataObj).encode()
-        encrypted = fernet.encrypt(toencrypt).decode()
-
         try:
             print("creating")
             collection.insert_one({
                 "_id": itemid, 
                 "id": itemid, 
-                'data': encrypted, 
+                'data': dataObj, 
                 "app": item['metadata']['dataOrigin'], 
                 "start": starttime, 
                 "end": endtime
@@ -93,7 +142,7 @@ def sync(method: str, request: SyncRequest, user_id: str = Depends(verify_token)
             collection.update_one(
                 {"_id": itemid}, 
                 {"$set": {
-                    'data': encrypted, 
+                    'data': dataObj, 
                     "app": item['metadata']['dataOrigin'], 
                     "start": starttime, 
                     "end": endtime
@@ -104,22 +153,21 @@ def sync(method: str, request: SyncRequest, user_id: str = Depends(verify_token)
 
 @router.post("/{method}/fetch")
 def fetch(method: str, request: FetchRequest, user_id: str = Depends(verify_token)):
+    # Validate and normalize the record type
+    method = validate_record_type(method)
+    
     userid = user_id
     db = mongo[settings.MONGO_DB]
     usrStore = db['users']
 
     try: 
-        user = usrStore.find_one({'_id': userid})
+        usrStore.find_one({'_id': userid})
     except InvalidId: 
         raise HTTPException(status_code=400, detail='invalid user id')
 
-    hashed_password = user['password']
-    key = base64.urlsafe_b64encode(hashed_password.encode("utf-8").ljust(32)[:32])
-    fernet = Fernet(key)
-
     queries = request.queries if request.queries else []
     
-    db = mongo['hacking-health_'+userid]
+    db = mongo['hh_'+userid]
     collection = db[method]
     
     docs = []
@@ -130,13 +178,16 @@ def fetch(method: str, request: FetchRequest, user_id: str = Depends(verify_toke
             query_dict.update(q)
     
     for doc in collection.find(query_dict):
-        doc['data'] = json.loads(fernet.decrypt(doc['data'].encode()).decode())
+        # Data is now stored as plain dict, no decryption needed
         docs.append(doc)
 
     return docs
 
 @router.put("/{method}/push", response_model=SuccessResponse)
 def push_data(method: str, request: PushRequest, user_id: str = Depends(verify_token)):
+    # Validate and normalize the record type
+    method = validate_record_type(method)
+    
     userid = user_id
     data = request.data
     if not isinstance(data, list):
@@ -182,6 +233,9 @@ def push_data(method: str, request: PushRequest, user_id: str = Depends(verify_t
 
 @router.delete("/{method}/delete", response_model=SuccessResponse)
 def del_data(method: str, request: DeleteRequest, user_id: str = Depends(verify_token)):
+    # Validate and normalize the record type
+    method = validate_record_type(method)
+    
     userid = user_id
     uuids = request.uuid
     if not isinstance(uuids, list):
@@ -219,7 +273,8 @@ def del_data(method: str, request: DeleteRequest, user_id: str = Depends(verify_
 
 @router.delete("/{method}", response_model=SuccessResponse)
 def del_from_db(method: str, request: DeleteRequest, user_id: str = Depends(verify_token)):
-    method = method[0].lower() + method[1:]
+    # Validate and normalize the record type
+    method = validate_record_type(method)
     
     userid = user_id
     uuids = request.uuid

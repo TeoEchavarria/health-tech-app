@@ -151,6 +151,9 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation 'com.google.firebase:firebase-messaging:23.0.0'
     
+    // Health Connect SDK - required for app's Kotlin code
+    implementation("androidx.health.connect:connect-client:1.1.0-alpha06")
+    
     // Google Assistant App Actions support (Modern Shortcuts Framework)
     implementation "com.google.assistant.appactions:suggestions:1.0.0"
     androidTestImplementation "com.google.assistant.appactions:testing:1.0.0"

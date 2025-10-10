@@ -70,7 +70,15 @@ paths:
       tags:
         - Sync
       operationId: sync
-      description: Sync data to the database.
+      description: >
+        Sync data to the database. Accepts both individual Health Connect records 
+        and aggregated payloads (recommended for better performance).
+        
+        For high-frequency data types (steps, heartRate, distance, etc.), consider 
+        using aggregated payloads to reduce network traffic and improve sync speed.
+        
+        The backend validates that the record type is in the canonical allow-list 
+        and accepts both camelCase (canonical) and PascalCase (Health Connect) formats.
       security:
       - bearerAuth: []
       parameters:
@@ -79,13 +87,13 @@ paths:
         required: true
         schema:
           type: string
-        description: 'Can be one of the following: activeCaloriesBurned, basalBodyTemperature,
-          basalMetabolicRate, bloodGlucose, bloodPressure, bodyFat, bodyTemperature,
-          boneMass, cervicalMucus, distance, exerciseSession, elevationGained, floorsClimbed,
-          heartRate, height, hydration, leanBodyMass, menstruationFlow, menstruationPeriod,
-          nutrition, ovulationTest, oxygenSaturation, power, respiratoryRate, restingHeartRate,
-          sleepSession, speed, steps, stepsCadence, totalCaloriesBurned, vo2Max, weight,
-          wheelchairPushes'
+        description: 'Can be one of the following canonical record types (case-insensitive): 
+          activeCaloriesBurned, basalBodyTemperature, basalMetabolicRate, bloodGlucose, 
+          bloodPressure, bodyFat, bodyTemperature, boneMass, cervicalMucus, distance, 
+          exerciseSession, elevationGained, floorsClimbed, heartRate, height, hydration, 
+          leanBodyMass, menstruationFlow, menstruationPeriod, nutrition, ovulationTest, 
+          oxygenSaturation, power, respiratoryRate, restingHeartRate, sleepSession, speed, 
+          steps, stepsCadence, totalCaloriesBurned, vo2Max, weight, wheelchairPushes'
       requestBody:
         content:
           application/json:
@@ -93,10 +101,17 @@ paths:
               properties:
                 data:
                   nullable: false
-                  type: array
-                  items:
-                    type: object
-                  description: The data to sync to the database.
+                  description: >
+                    The data to sync to the database. Can be:
+                    1. Array of Health Connect record objects (traditional format)
+                    2. Array of aggregated payloads (recommended - see aggregatedPayload schema)
+                    3. Single record object
+                    4. Single aggregated payload object
+                  oneOf:
+                    - type: array
+                      items:
+                        type: object
+                    - type: object
       responses:
         '200':
           description: ''
@@ -338,3 +353,79 @@ components:
             type: string
           description: The uuid of the record to delete. Can be a string or an array
             of strings.
+    aggregatedPayload:
+      description: >
+        Aggregated health data payload for efficient bulk sync.
+        Instead of sending per-minute records, data is aggregated into hourly or daily buckets.
+        This reduces payload size and improves sync performance.
+      properties:
+        type:
+          nullable: false
+          type: string
+          enum:
+            - activeCaloriesBurned
+            - basalBodyTemperature
+            - basalMetabolicRate
+            - bloodGlucose
+            - bloodPressure
+            - bodyFat
+            - bodyTemperature
+            - boneMass
+            - cervicalMucus
+            - distance
+            - exerciseSession
+            - elevationGained
+            - floorsClimbed
+            - heartRate
+            - height
+            - hydration
+            - leanBodyMass
+            - menstruationFlow
+            - menstruationPeriod
+            - nutrition
+            - ovulationTest
+            - oxygenSaturation
+            - power
+            - respiratoryRate
+            - restingHeartRate
+            - sleepSession
+            - speed
+            - steps
+            - stepsCadence
+            - totalCaloriesBurned
+            - vo2Max
+            - weight
+            - wheelchairPushes
+          description: The canonical record type (camelCase format)
+        granularity:
+          nullable: false
+          type: string
+          enum:
+            - hour
+            - day
+          description: Time bucket granularity for aggregation
+        periodStart:
+          nullable: false
+          type: string
+          format: date-time
+          description: Start of the aggregation period (ISO 8601)
+        periodEnd:
+          nullable: false
+          type: string
+          format: date-time
+          description: End of the aggregation period (ISO 8601)
+        data:
+          nullable: false
+          type: object
+          description: >
+            Aggregated data for the period. Structure varies by record type.
+            Examples:
+            - steps: { "totalSteps": 5430 }
+            - heartRate: { "avgBpm": 72, "minBpm": 58, "maxBpm": 145, "samples": 120 }
+            - sleepSession: { "totalMinutes": 458, "stagesMinutes": { "DEEP": 90, "LIGHT": 250, "REM": 118 } }
+            - distance: { "totalMeters": 8420.5 }
+            - activeCaloriesBurned: { "totalKcal": 523.4 }
+        metadata:
+          nullable: true
+          type: object
+          description: Optional metadata about the aggregated data (e.g., source app, device info)

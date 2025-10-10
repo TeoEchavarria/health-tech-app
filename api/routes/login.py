@@ -13,8 +13,7 @@ mongo = pymongo.MongoClient(settings.MONGO_URI)
 from argon2 import PasswordHasher
 ph = PasswordHasher()
 
-from cryptography.fernet import Fernet
-import base64, secrets, datetime
+import secrets, datetime
 
 router = APIRouter()
 

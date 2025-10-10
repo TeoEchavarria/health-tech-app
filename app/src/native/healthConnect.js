@@ -13,6 +13,7 @@ import {
   SdkAvailabilityStatus
 } from 'react-native-health-connect';
 import { Linking } from 'react-native';
+import { getHealthConnectRecordTypes } from '../types/recordTypes';
 
 /**
  * Check if Health Connect is available on the device
@@ -170,44 +171,10 @@ export async function deleteRecordsByUuids(recordType, clientIds, uuids) {
 }
 
 /**
- * All available record types in Health Connect
+ * All available record types in Health Connect (PascalCase format)
+ * This list is derived from the canonical recordTypes.js contract
  */
-export const RECORD_TYPES = [
-  "ActiveCaloriesBurned",
-  "BasalBodyTemperature",
-  "BloodGlucose",
-  "BloodPressure",
-  "BasalMetabolicRate",
-  "BodyFat",
-  "BodyTemperature",
-  "BoneMass",
-  "CyclingPedalingCadence",
-  "CervicalMucus",
-  "ExerciseSession",
-  "Distance",
-  "ElevationGained",
-  "FloorsClimbed",
-  "HeartRate",
-  "Height",
-  "Hydration",
-  "LeanBodyMass",
-  "MenstruationFlow",
-  "MenstruationPeriod",
-  "Nutrition",
-  "OvulationTest",
-  "OxygenSaturation",
-  "Power",
-  "RespiratoryRate",
-  "RestingHeartRate",
-  "SleepSession",
-  "Speed",
-  "Steps",
-  "StepsCadence",
-  "TotalCaloriesBurned",
-  "Vo2Max",
-  "Weight",
-  "WheelchairPushes"
-];
+export const RECORD_TYPES = getHealthConnectRecordTypes();
 
 /**
  * Get all permission objects (read and write) for all record types
