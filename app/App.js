@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View, TextInput, Button, Switch, Modal, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, TextInput, Switch, Modal, Linking, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -17,7 +17,14 @@ import {requestNotifications} from 'react-native-permissions';
 import * as Sentry from '@sentry/react-native';
 import messaging from '@react-native-firebase/messaging';
 import {Notifications} from 'react-native-notifications';
-import DateTimePicker, { DateType, useDefaultStyles } from 'react-native-ui-datepicker';
+import DateTimePicker, { useDefaultStyles } from 'react-native-ui-datepicker';
+import config from './config';
+
+// Import new modular services and components
+import { syncAll } from './src/services/healthSync';
+import { setAuthToken } from './src/services/api';
+import { EventEmitter } from './src/utils/eventBus';
+import DashboardView from './src/screens/DashboardView';
 
 
 const setObj = async (key, value) => { try { const jsonValue = JSON.stringify(value); await AsyncStorage.setItem(key, jsonValue) } catch (e) { console.log(e) } }
@@ -91,34 +98,10 @@ messaging().onMessage(remoteMessage => {
 });
 
 let login;
-let apiBase = 'https://api.hcgateway.shuchir.dev';
+let apiBase = config.apiBaseUrl; // Read from config file
 let lastSync = null;
-let taskDelay = 7200 * 1000; // 2 hours
-let fullSyncMode = true; // Default to full 30-day sync
-
-Toast.show({
-  type: 'info',
-  text1: "Loading API Base URL...",
-  autoHide: false
-})
-get('apiBase')
-.then(res => {
-  if (res) {
-    apiBase = res;
-    Toast.hide();
-    Toast.show({
-      type: "success",
-      text1: "API Base URL loaded",
-    })
-  }
-  else {
-    Toast.hide();
-    Toast.show({
-      type: "error",
-      text1: "API Base URL not found. Using default server.",
-    })
-  }
-})
+let taskDelay = config.defaultSyncIntervalHours * 60 * 60 * 1000; // Convert hours to milliseconds
+let fullSyncMode = config.defaultFullSyncMode; // Default to full 30-day sync
 
 get('login')
 .then(res => {
@@ -142,7 +125,7 @@ get('fullSyncMode')
 })
 
 const askForPermissions = async () => {
-  const isInitialized = await initialize();
+  await initialize();
 
   const grantedPermissions = await requestPermission([
     { accessType: 'read', recordType: 'ActiveCaloriesBurned' },
@@ -230,7 +213,7 @@ const refreshTokenFunc = async () => {
   let refreshToken = await get('refreshToken');
   if (!refreshToken) return;
   try {
-    let response = await axios.post(`${apiBase}/api/v2/refresh`, {
+    let response = await axios.post(`${apiBase}/refresh`, {
       refresh: refreshToken
     });
     if ('token' in response.data) {
@@ -266,7 +249,7 @@ const refreshTokenFunc = async () => {
 }
 
 const sync = async (customStartTime, customEndTime) => {
-  const isInitialized = await initialize();
+  await initialize();
   console.log("Syncing data...");
   let numRecords = 0;
   let numRecordsSynced = 0;
@@ -326,7 +309,7 @@ const sync = async (customStartTime, customEndTime) => {
           setTimeout(async () => {
             try {
               let record = await readRecord(recordTypes[i], records[j].metadata.id);
-              await axios.post(`${apiBase}/api/v2/sync/${recordTypes[i]}`, {
+              await axios.post(`${apiBase}/sync/${recordTypes[i]}`, {
                 data: record
               }, {
                 headers: {
@@ -342,8 +325,8 @@ const sync = async (customStartTime, customEndTime) => {
             try {
             ReactNativeForegroundService.update({
               id: 1244,
-              title: 'HCGateway Sync Progress',
-              message: `HCGateway is currently syncing... [${numRecordsSynced}/${numRecords}]`,
+              title: 'Hacking Health Sync Progress',
+              message: `Hacking Health is currently syncing... [${numRecordsSynced}/${numRecords}]`,
               icon: 'ic_launcher',
               setOnlyAlertOnce: true,
               color: '#000000',
@@ -356,8 +339,8 @@ const sync = async (customStartTime, customEndTime) => {
             if (numRecordsSynced == numRecords) {
               ReactNativeForegroundService.update({
                 id: 1244,
-                title: 'HCGateway Sync Progress',
-                message: `HCGateway is working in the background to sync your data.`,
+                title: 'Hacking Health Sync Progress',
+                message: `Hacking Health is working in the background to sync your data.`,
                 icon: 'ic_launcher',
                 setOnlyAlertOnce: true,
                 color: '#000000',
@@ -370,7 +353,7 @@ const sync = async (customStartTime, customEndTime) => {
       }
 
       else {
-        await axios.post(`${apiBase}/api/v2/sync/${recordTypes[i]}`, {
+        await axios.post(`${apiBase}/sync/${recordTypes[i]}`, {
           data: records
         }, {
           headers: {
@@ -381,8 +364,8 @@ const sync = async (customStartTime, customEndTime) => {
         try {
         ReactNativeForegroundService.update({
           id: 1244,
-          title: 'HCGateway Sync Progress',
-          message: `HCGateway is currently syncing... [${numRecordsSynced}/${numRecords}]`,
+          title: 'Hacking Health Sync Progress',
+          message: `Hacking Health is currently syncing... [${numRecordsSynced}/${numRecords}]`,
           icon: 'ic_launcher',
           setOnlyAlertOnce: true,
           color: '#000000',
@@ -395,8 +378,8 @@ const sync = async (customStartTime, customEndTime) => {
         if (numRecordsSynced == numRecords) {
           ReactNativeForegroundService.update({
             id: 1244,
-            title: 'HCGateway Sync Progress',
-            message: `HCGateway is working in the background to sync your data.`,
+            title: 'Hacking Health Sync Progress',
+            message: `Hacking Health is working in the background to sync your data.`,
             icon: 'ic_launcher',
             setOnlyAlertOnce: true,
             color: '#000000',
@@ -409,7 +392,7 @@ const sync = async (customStartTime, customEndTime) => {
 }
 
 const handlePush = async (message) => {
-  const isInitialized = await initialize();
+  await initialize();
   
   let data = JSON.parse(message.data);
   console.log(data);
@@ -417,6 +400,16 @@ const handlePush = async (message) => {
   insertRecords(data)
   .then((ids) => {
     console.log("Records inserted successfully: ", { ids });
+    
+    // Emit event to update UI
+    EventEmitter.emit('PUSH_RECEIVED', {
+      type: data[0]?.recordType,
+      count: ids.length
+    });
+    EventEmitter.emit('SYNC_COMPLETED', {
+      timestamp: new Date().toISOString(),
+      detail: 'push'
+    });
   })
   .catch((error) => {
     Notifications.postLocalNotification({
@@ -431,13 +424,13 @@ const handlePush = async (message) => {
 }
 
 const handleDel = async (message) => {
-  const isInitialized = await initialize();
+  await initialize();
   
   let data = JSON.parse(message.data);
   console.log(data);
 
   deleteRecordsByUuids(data.recordType, data.uuids, data.uuids)
-  axios.delete(`${apiBase}/api/v2/sync/${data.recordType}`, {
+  axios.delete(`${apiBase}/sync/${data.recordType}`, {
     data: {
       uuid: data.uuids,
     },
@@ -445,6 +438,20 @@ const handleDel = async (message) => {
       "Authorization": `Bearer ${login}`
     }
   })
+  .then(() => {
+    // Emit event to update UI
+    EventEmitter.emit('DELETE_RECEIVED', {
+      type: data.recordType,
+      count: data.uuids.length
+    });
+    EventEmitter.emit('SYNC_COMPLETED', {
+      timestamp: new Date().toISOString(),
+      detail: 'delete'
+    });
+  })
+  .catch((error) => {
+    console.error('Delete error:', error);
+  });
 }
   
 
@@ -456,6 +463,9 @@ export default Sentry.wrap(function App() {
   const [customEndDate, setcustomEndDate] = React.useState(new Date());
   const [useCustomDates, setUseCustomDates] = React.useState(false);
   const [showDatePickerModal, setShowDatePickerModal] = React.useState(false);
+  const [currentView, setCurrentView] = React.useState('login'); // 'login', 'dashboard', 'main'
+  const [isSyncing, setIsSyncing] = React.useState(false);
+  const [username, setUsername] = React.useState('');
   const defaultCalStyles = useDefaultStyles();
 
   const loginFunc = async () => {
@@ -465,15 +475,37 @@ export default Sentry.wrap(function App() {
       autoHide: false
     })
 
+    console.log('=== LOGIN DEBUG ===');
+    console.log('API Base URL:', apiBase);
+    console.log('Full login URL:', `${apiBase}/login`);
+    console.log('Form data:', form);
+
     try {
     let fcmToken = await requestUserPermission();
     form.fcmToken = fcmToken;
-    let response = await axios.post(`${apiBase}/api/v2/login`, form);
+    console.log('FCM Token:', fcmToken);
+    console.log('Sending POST request to:', `${apiBase}/login`);
+    console.log('Request payload:', form);
+    
+    let response = await axios.post(`${apiBase}/login`, form);
+    
+    console.log('Response received:', response.data);
+    console.log('Response status:', response.status);
+    
     if ('token' in response.data) {
-      console.log(response.data);
+      console.log('Login successful! Token received:', response.data.token);
       await setPlain('login', response.data.token);
       login = response.data.token;
       await setPlain('refreshToken', response.data.refresh);
+      
+      // Set auth token for API client
+      setAuthToken(response.data.token);
+      
+      if (form.username) {
+        setUsername(form.username);
+        await setPlain('username', form.username);
+      }
+      setCurrentView('dashboard');
       forceUpdate();
       Toast.hide();
       Toast.show({
@@ -483,6 +515,7 @@ export default Sentry.wrap(function App() {
       askForPermissions();
     }
     else {
+      console.log('Login failed - no token in response:', response.data);
       Toast.hide();
       Toast.show({
         type: 'error',
@@ -493,6 +526,11 @@ export default Sentry.wrap(function App() {
     }
 
     catch (err) {
+      console.log('=== LOGIN ERROR ===');
+      console.log('Error message:', err.message);
+      console.log('Error response:', err.response?.data);
+      console.log('Error status:', err.response?.status);
+      console.log('Full error:', err);
       Toast.hide();
       Toast.show({
         type: 'error',
@@ -501,6 +539,75 @@ export default Sentry.wrap(function App() {
       })
     }
   }
+
+  // Handle deep link for Google Assistant App Actions
+  const handleDeepLink = (url) => {
+    console.log('Deep link received:', url);
+    
+    if (!url) return;
+    
+    // Check if the deep link is for syncing health data
+    if (url.includes('echavarrias://sync_health')) {
+      console.log('Triggering health data sync from Google Assistant...');
+      
+      // Check if user is logged in before syncing
+      if (login) {
+        Toast.show({
+          type: 'info',
+          text1: 'Google Assistant',
+          text2: 'Syncing your health data...',
+        });
+        
+        // Call the sync function
+        sync()
+          .then(() => {
+            Toast.show({
+              type: 'success',
+              text1: 'Sync Complete',
+              text2: 'Your health data has been synced successfully.',
+            });
+          })
+          .catch((error) => {
+            console.error('Sync error:', error);
+            Toast.show({
+              type: 'error',
+              text1: 'Sync Failed',
+              text2: 'Could not sync your health data.',
+            });
+          });
+      } else {
+        Toast.show({
+          type: 'error',
+          text1: 'Not Logged In',
+          text2: 'Please log in to sync your health data.',
+        });
+      }
+    }
+  };
+
+  // Effect for deep link handling
+  React.useEffect(() => {
+    // Handle deep link when app is opened from closed state
+    Linking.getInitialURL()
+      .then(url => {
+        if (url) {
+          console.log('App opened with URL:', url);
+          handleDeepLink(url);
+        }
+      })
+      .catch(err => console.error('Error getting initial URL:', err));
+
+    // Handle deep link when app is already running
+    const subscription = Linking.addEventListener('url', (event) => {
+      console.log('Deep link event:', event.url);
+      handleDeepLink(event.url);
+    });
+
+    // Cleanup listener on unmount
+    return () => {
+      subscription.remove();
+    };
+  }, [login]);
 
   React.useEffect(() => {
     requestNotifications(['alert']).then(({status, settings}) => {
@@ -511,6 +618,15 @@ export default Sentry.wrap(function App() {
     .then(res => {
       if (res) {
         login = res;
+        // Set auth token for API client
+        setAuthToken(res);
+        setCurrentView('dashboard'); // Go to dashboard when already logged in
+        
+        // Load username if available
+        get('username').then(savedUsername => {
+          if (savedUsername) setUsername(savedUsername);
+        });
+        
         get('taskDelay')
         .then(res => {
           if (res) taskDelay = Number(res);
@@ -519,7 +635,7 @@ export default Sentry.wrap(function App() {
         ReactNativeForegroundService.add_task(() => sync(), {
           delay: taskDelay,
           onLoop: true,
-          taskId: 'hcgateway_sync',
+          taskId: 'hacking-health_sync',
           onError: e => console.log(`Error logging:`, e),
         });
 
@@ -532,8 +648,8 @@ export default Sentry.wrap(function App() {
 
         ReactNativeForegroundService.start({
           id: 1244,
-          title: 'HCGateway Sync Service',
-          message: 'HCGateway is working in the background to sync your data.',
+          title: 'Hacking Health Sync Service',
+          message: 'Hacking Health is working in the background to sync your data.',
           icon: 'ic_launcher',
           setOnlyAlertOnce: true,
           color: '#000000',
@@ -556,110 +672,253 @@ export default Sentry.wrap(function App() {
     return date.toLocaleDateString();
   };
 
+  const handleSyncAndNavigate = async () => {
+    setIsSyncing(true);
+    try {
+      await sync();
+      Toast.show({
+        type: 'success',
+        text1: "Sync Complete",
+        text2: "Your health data has been synchronized.",
+      });
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: "Sync Failed",
+        text2: error.message,
+      });
+    } finally {
+      setIsSyncing(false);
+      setCurrentView('main');
+    }
+  };
+
   return (
     <View style={styles.container}>
-      {login &&
-        <View>
-          <Text style={{ fontSize: 20, marginVertical: 10 }}>You are currently logged in new HealthTechMed App</Text>
-          <Text style={{ fontSize: 17, marginVertical: 10 }}>Last Sync: {lastSync}</Text>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+      {!login || currentView === 'login' ? (
+        <View style={styles.mainContent}>
+          {/* Login View */}
+          <View style={styles.loginHeader}>
+            <Text style={styles.loginTitle}>Welcome</Text>
+            <Text style={styles.loginSubtitle}>
+              Sign in to sync your health data
+            </Text>
+          </View>
 
-          <Text style={{ marginTop: 10, fontSize: 15 }}>API Base URL:</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="API Base URL"
-            defaultValue={apiBase}
-            onChangeText={text => {
-              apiBase = text;
-              setPlain('apiBase', text);
-            }}
-          />
+          {/* Login Card */}
+          <View style={styles.card}>
+            <Text style={styles.infoText}>
+              If you don't have an account, one will be created automatically
+            </Text>
 
-          <Text style={{ marginTop: 10, fontSize: 15 }}>Sync Interval (in hours):</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Sync Interval"
-            keyboardType='numeric'
-            defaultValue={(taskDelay / (1000 * 60 * 60)).toString()}
-            onChangeText={text => {
-              const hours = Number(text);
-              taskDelay = hours * 60 * 60 * 1000; 
-              setPlain('taskDelay', String(taskDelay));
-              ReactNativeForegroundService.update_task(() => sync(), {
-                delay: taskDelay,
-              })
-              Toast.show({
-                type: 'success',
-                text1: `Sync interval updated to ${hours} ${hours === 1 ? 'hour' : 'hours'}`,
-              })
-            }}
-          />
-
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 10 }}>
-            <Text style={{ fontSize: 15 }}>Enable Sentry:</Text>
-            <Switch
-              value={isSentryEnabled}
-              onValueChange={async (value) => {
-              if (value) {
-                Sentry.init({
-                dsn: 'https://0e831d625e3149f83c56fc44d13003b7@o4508755575701504.ingest.de.sentry.io/4509136718004304',
-                tracesSampleRate: 1.0,
-                });
-                Toast.show({
-                type: 'success',
-                text1: "Sentry enabled",
-                });
-                isSentryEnabled = true;
-                forceUpdate();
-              } else {
-                Sentry.close();
-                Toast.show({
-                type: 'success',
-                text1: "Sentry disabled",
-                });
-                isSentryEnabled = false;
-                forceUpdate();
-              }
-              await setPlain('sentryEnabled', value.toString());
-              }}
-            />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Username</Text>
+              <TextInput
+                style={styles.modernInput}
+                placeholder="Enter your username"
+                placeholderTextColor="#9CA3AF"
+                onChangeText={text => setForm({ ...form, username: text })}
+              />
             </View>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 10 }}>
-            <Text style={{ fontSize: 15 }}>Full 30-day sync:</Text>
-            <Switch
-              value={fullSyncMode}
-              onValueChange={async (value) => {
-                if (!value) {
-                  setShowSyncWarning(true);
-                } else {
-                  fullSyncMode = value;
-                  await setPlain('fullSyncMode', value.toString());
-                  Toast.show({
-                    type: 'info',
-                    text1: "Sync mode updated",
-                    text2: "Will sync full 30 days of data"
-                  });
-                  forceUpdate();
-                }
-              }}
-            />
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Password</Text>
+              <TextInput
+                style={styles.modernInput}
+                placeholder="Enter your password"
+                placeholderTextColor="#9CA3AF"
+                secureTextEntry={true}
+                onChangeText={text => setForm({ ...form, password: text })}
+              />
+            </View>
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabelContainer}>
+                <Text style={styles.settingLabel}>Error Tracking</Text>
+                <Text style={styles.settingDescription}>Enable Sentry monitoring</Text>
+              </View>
+              <Switch
+                value={isSentryEnabled}
+                defaultValue={isSentryEnabled}
+                trackColor={{ false: '#D1D5DB', true: '#93C5FD' }}
+                thumbColor={isSentryEnabled ? '#3B82F6' : '#F3F4F6'}
+                onValueChange={async (value) => {
+                  if (value) {
+                    Sentry.init({
+                      dsn: config.sentryDsn,
+                    });
+                    Toast.show({
+                      type: 'success',
+                      text1: "Sentry enabled",
+                    });
+                    isSentryEnabled = true;
+                    forceUpdate();
+                  } else {
+                    Sentry.close();
+                    Toast.show({
+                      type: 'success',
+                      text1: "Sentry disabled",
+                    });
+                    isSentryEnabled = false;
+                    forceUpdate();
+                  }
+                  await setPlain('sentryEnabled', value.toString());
+                }} 
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.button, styles.buttonPrimary, { marginTop: 20 }]}
+              onPress={() => loginFunc()}
+            >
+              <Text style={styles.buttonText}>Login</Text>
+            </TouchableOpacity>
           </View>
-          
+        </View>
+      ) : currentView === 'dashboard' ? (
+        <DashboardView 
+          onNavigateToSettings={() => setCurrentView('main')}
+        />
+      ) : (
+        <View style={styles.mainContent}>
+          {/* Header Section */}
+          <View style={styles.headerCard}>
+            <Text style={styles.headerTitle}>Hacking Health</Text>
+            <Text style={styles.headerSubtitle}>Health Connect Sync</Text>
+          </View>
+
+          {/* Status Card */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Sync Status</Text>
+            <View style={styles.statusRow}>
+              <View style={styles.statusIndicator} />
+              <Text style={styles.statusText}>Connected</Text>
+            </View>
+            <Text style={styles.lastSyncText}>
+              Last Sync: {lastSync ? new Date(lastSync).toLocaleString() : 'Never'}
+            </Text>
+          </View>
+
+          {/* Settings Card */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Settings</Text>
+            
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabelContainer}>
+                <Text style={styles.settingLabel}>Sync Interval</Text>
+                <Text style={styles.settingDescription}>How often to sync data</Text>
+              </View>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.modernInput}
+                  placeholder="Hours"
+                  keyboardType='numeric'
+                  defaultValue={(taskDelay / (1000 * 60 * 60)).toString()}
+                  onChangeText={text => {
+                    const hours = Number(text);
+                    taskDelay = hours * 60 * 60 * 1000; 
+                    setPlain('taskDelay', String(taskDelay));
+                    ReactNativeForegroundService.update_task(() => sync(), {
+                      delay: taskDelay,
+                    })
+                    Toast.show({
+                      type: 'success',
+                      text1: `Sync interval updated to ${hours} ${hours === 1 ? 'hour' : 'hours'}`,
+                    })
+                  }}
+                />
+                <Text style={styles.inputUnit}>hrs</Text>
+              </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabelContainer}>
+                <Text style={styles.settingLabel}>Full 30-day Sync</Text>
+                <Text style={styles.settingDescription}>Sync all data or incremental</Text>
+              </View>
+              <Switch
+                value={fullSyncMode}
+                trackColor={{ false: '#D1D5DB', true: '#93C5FD' }}
+                thumbColor={fullSyncMode ? '#3B82F6' : '#F3F4F6'}
+                onValueChange={async (value) => {
+                  if (!value) {
+                    setShowSyncWarning(true);
+                  } else {
+                    fullSyncMode = value;
+                    await setPlain('fullSyncMode', value.toString());
+                    Toast.show({
+                      type: 'info',
+                      text1: "Sync mode updated",
+                      text2: "Will sync full 30 days of data"
+                    });
+                    forceUpdate();
+                  }
+                }}
+              />
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingLabelContainer}>
+                <Text style={styles.settingLabel}>Error Tracking</Text>
+                <Text style={styles.settingDescription}>Enable Sentry monitoring</Text>
+              </View>
+              <Switch
+                value={isSentryEnabled}
+                trackColor={{ false: '#D1D5DB', true: '#93C5FD' }}
+                thumbColor={isSentryEnabled ? '#3B82F6' : '#F3F4F6'}
+                onValueChange={async (value) => {
+                  if (value) {
+                    Sentry.init({
+                      dsn: config.sentryDsn,
+                      tracesSampleRate: 1.0,
+                    });
+                    Toast.show({
+                      type: 'success',
+                      text1: "Sentry enabled",
+                    });
+                    isSentryEnabled = true;
+                    forceUpdate();
+                  } else {
+                    Sentry.close();
+                    Toast.show({
+                      type: 'success',
+                      text1: "Sentry disabled",
+                    });
+                    isSentryEnabled = false;
+                    forceUpdate();
+                  }
+                  await setPlain('sentryEnabled', value.toString());
+                }}
+              />
+            </View>
+          </View>
+
+          {/* Warning Card */}
           {showSyncWarning && (
-            <View style={styles.warningContainer}>
+            <View style={styles.warningCard}>
+              <Text style={styles.warningTitle}>⚠️ Warning</Text>
               <Text style={styles.warningText}>
-                Warning: Incremental sync only syncs data since the last sync. 
+                Incremental sync only syncs data since the last sync. 
                 You may miss data if the app stops abruptly.
               </Text>
               <View style={styles.warningButtons}>
-                <Button
-                  title="Cancel"
-                  onPress={() => {
-                    setShowSyncWarning(false);
-                  }}
-                />
-                <Button
-                  title="Continue"
+                <TouchableOpacity
+                  style={[styles.button, styles.buttonSecondary]}
+                  onPress={() => setShowSyncWarning(false)}
+                >
+                  <Text style={styles.buttonSecondaryText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.button, styles.buttonWarning]}
                   onPress={async () => {
                     fullSyncMode = false;
                     await setPlain('fullSyncMode', 'false');
@@ -671,25 +930,40 @@ export default Sentry.wrap(function App() {
                     });
                     forceUpdate();
                   }}
-                />
+                >
+                  <Text style={styles.buttonText}>Continue</Text>
+                </TouchableOpacity>
               </View>
             </View>
           )}
 
-          <View style={{ marginTop: 10, marginBottom: 5 }}>
-            <Text style={{ fontSize: 15, marginBottom: 5 }}>Sync Range:</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text>
-                {customStartDate ? formatDateToReadable(customStartDate) : 'Not set'} - 
-                {customEndDate ? formatDateToReadable(customEndDate) : 'Not set'}
-              </Text>
-              <Button 
-                title="Select Dates" 
-                onPress={() => setShowDatePickerModal(true)}
-              />
+          {/* Sync Range Card */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Custom Sync Range</Text>
+            <View style={styles.dateRangeContainer}>
+              <View style={styles.dateDisplay}>
+                <Text style={styles.dateLabel}>From</Text>
+                <Text style={styles.dateValue}>
+                  {formatDateToReadable(customStartDate)}
+                </Text>
+              </View>
+              <Text style={styles.dateSeparator}>→</Text>
+              <View style={styles.dateDisplay}>
+                <Text style={styles.dateLabel}>To</Text>
+                <Text style={styles.dateValue}>
+                  {formatDateToReadable(customEndDate)}
+                </Text>
+              </View>
             </View>
+            <TouchableOpacity
+              style={[styles.button, styles.buttonSecondary, { marginTop: 12 }]}
+              onPress={() => setShowDatePickerModal(true)}
+            >
+              <Text style={styles.buttonSecondaryText}>Select Dates</Text>
+            </TouchableOpacity>
           </View>
 
+          {/* Date Picker Modal */}
           <Modal
             visible={showDatePickerModal}
             transparent={true}
@@ -714,196 +988,509 @@ export default Sentry.wrap(function App() {
                 />
                 
                 <View style={styles.modalButtons}>
-                  <Button
-                    title="Cancel"
+                  <TouchableOpacity
+                    style={[styles.button, styles.buttonSecondary, { flex: 1, marginRight: 8 }]}
                     onPress={() => setShowDatePickerModal(false)}
-                    color="darkgrey"
-                  />
-                  <Button
-                    title="Apply"
+                  >
+                    <Text style={styles.buttonSecondaryText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.button, styles.buttonPrimary, { flex: 1, marginLeft: 8 }]}
                     onPress={() => {
                       setUseCustomDates(true);
                       setShowDatePickerModal(false);
                     }}
-                  />
+                  >
+                    <Text style={styles.buttonText}>Apply</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
           </Modal>
 
-          <View style={{ marginTop: 10, marginBottom: 10 }}>
-            <Button
-              title={useCustomDates ? "Sync Selected Range" : "Sync Now (Default)"}
-              onPress={() => {
-                if (!useCustomDates) {
-                  sync();
-                }
-                else if (customStartDate && customEndDate) {
-                  sync(formatDateToISOString(customStartDate), formatDateToISOString(customEndDate));
-                }
-              }}
-            />
-          </View>
-
-          <View style={{ marginTop: 20 }}>
-            <Button
-              title="Logout"
-              onPress={() => {
-                delkey('login');
-                login = null;
-                Toast.show({
-                  type: 'success',
-                  text1: "Logged out successfully",
-                })
-                forceUpdate();
-              }}
-              color={'darkred'}
-            />
-          </View>
-        </View>
-      }
-      {!login &&
-        <View>
-          <Text style={{ 
-            fontSize: 30,
-            fontWeight: 'bold',
-            textAlign: 'center',
-           }}>Login</Text>
-
-           <Text style={{ marginVertical: 10 }}>If you don't have an account, one will be made for you when logging in.</Text>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Username"
-            onChangeText={text => setForm({ ...form, username: text })}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            secureTextEntry={true}
-            onChangeText={text => setForm({ ...form, password: text })}
-          />
-          <Text style={{ marginVertical: 10 }}>API Base URL:</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="API Base URL"
-            defaultValue={apiBase}
-            onChangeText={text => {
-              apiBase = text;
-              setPlain('apiBase', text);
-            }}
-          />
-
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 10 }}>
-            <Text style={{ fontSize: 15 }}>Enable Sentry:</Text>
-            <Switch
-              value={isSentryEnabled}
-              defaultValue={isSentryEnabled}
-              onValueChange={async (value) => {
-                if (value) {
-                  Sentry.init({
-                    dsn: 'https://e4a201b96ea602d28e90b5e4bbe67aa6@sentry.shuchir.dev/6',
-                  });
-                  Toast.show({
-                    type: 'success',
-                    text1: "Sentry enabled",
-                  });
-                  isSentryEnabled = true;
-                  forceUpdate();
-                } else {
-                  Sentry.close();
-                  Toast.show({
-                    type: 'success',
-                    text1: "Sentry disabled",
-                  });
-                  isSentryEnabled = false;
-                  forceUpdate();
-                }
-                await setPlain('sentryEnabled', value.toString());
-              }} 
-            />
-          </View>
-
-          <Button
-            title="Login"
+          {/* Action Buttons */}
+          <TouchableOpacity
+            style={[styles.button, styles.buttonPrimary]}
             onPress={() => {
-              loginFunc()
+              if (!useCustomDates) {
+                sync();
+              }
+              else if (customStartDate && customEndDate) {
+                sync(formatDateToISOString(customStartDate), formatDateToISOString(customEndDate));
+              }
             }}
-          />
-        </View>
-      }
+          >
+            <Text style={styles.buttonText}>
+              {useCustomDates ? "Sync Selected Range" : "Sync Now"}
+            </Text>
+          </TouchableOpacity>
 
-    <StatusBar style="dark" />
-    <Toast />
+          <TouchableOpacity
+            style={[styles.button, styles.buttonSecondary]}
+            onPress={() => setCurrentView('dashboard')}
+          >
+            <Text style={styles.buttonSecondaryText}>📊 View Dashboard</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.buttonDanger]}
+            onPress={() => {
+              delkey('login');
+              delkey('username');
+              login = null;
+              setUsername('');
+              setCurrentView('login');
+              Toast.show({
+                type: 'success',
+                text1: "Logged out successfully",
+              })
+              forceUpdate();
+            }}
+          >
+            <Text style={styles.buttonText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      </ScrollView>
+
+      <StatusBar style="dark" />
+      <Toast />
     </View>
   );
 });;
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    width: '100%',
-    textAlign: "center",
-    padding: 50
-  },
-
-  input: {
-    height: 50,
-    marginVertical: 7,
-    borderWidth: 1,
-    borderRadius: 4,
-    padding: 10,
-    width: 350,
-    fontSize: 17
+    flex: 1,
+    backgroundColor: '#F9FAFB',
   },
   
-  warningContainer: {
-    backgroundColor: '#fff3cd',
-    borderColor: '#ffeeba',
-    borderWidth: 1,
+  scrollView: {
+    flex: 1,
+  },
+  
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+  },
+  
+  mainContent: {
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
+  },
+
+  // Header Styles
+  headerCard: {
+    backgroundColor: '#667eea',
+    borderRadius: 20,
+    padding: 32,
+    marginBottom: 20,
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  
+  headerSubtitle: {
+    fontSize: 16,
+    color: '#E0E7FF',
+    fontWeight: '500',
+  },
+
+  // Card Styles
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 16,
+  },
+
+  // Status Styles
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  
+  statusIndicator: {
+    width: 10,
+    height: 10,
     borderRadius: 5,
-    padding: 10,
-    marginVertical: 10,
+    backgroundColor: '#10B981',
+    marginRight: 10,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+  },
+  
+  statusText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#10B981',
+  },
+  
+  lastSyncText: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+
+  // Settings Styles
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  
+  settingLabelContainer: {
+    flex: 1,
+    marginRight: 16,
+  },
+  
+  settingLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  
+  settingDescription: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 8,
+  },
+
+  // Input Styles
+  inputGroup: {
+    marginBottom: 16,
+  },
+  
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  
+  modernInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    color: '#111827',
+    minWidth: 80,
+  },
+  
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  
+  inputUnit: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginLeft: 8,
+  },
+
+  // Button Styles
+  button: {
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  
+  buttonPrimary: {
+    backgroundColor: '#3B82F6',
+  },
+  
+  buttonSecondary: {
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  
+  buttonDanger: {
+    backgroundColor: '#EF4444',
+  },
+  
+  buttonWarning: {
+    backgroundColor: '#F59E0B',
+  },
+  
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  
+  buttonSecondaryText: {
+    color: '#374151',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // Warning Card Styles
+  warningCard: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  
+  warningTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#92400E',
+    marginBottom: 8,
   },
   
   warningText: {
-    color: '#856404',
-    marginBottom: 10,
+    fontSize: 14,
+    color: '#92400E',
+    lineHeight: 20,
+    marginBottom: 16,
   },
   
   warningButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    gap: 12,
   },
 
+  // Date Range Styles
+  dateRangeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  
+  dateDisplay: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  
+  dateLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  
+  dateValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  
+  dateSeparator: {
+    fontSize: 20,
+    color: '#9CA3AF',
+    marginHorizontal: 12,
+  },
+
+  // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   
   modalContent: {
-    backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 20,
-    width: '90%',
-    maxHeight: '80%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
   },
   
   modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 15,
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 20,
     textAlign: 'center',
   },
   
   modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 15,
+    marginTop: 20,
+  },
+
+  // Login Styles
+  loginHeader: {
+    alignItems: 'center',
+    marginBottom: 32,
+    paddingTop: 20,
+  },
+  
+  loginTitle: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  
+  loginSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  
+  infoText: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+
+  // Dashboard Styles
+  dashboardHeader: {
+    alignItems: 'center',
+    marginBottom: 32,
+    paddingTop: 40,
+  },
+  
+  dashboardTitle: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  
+  dashboardSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+
+  dashboardCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 32,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+    alignItems: 'center',
+  },
+
+  dashboardIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+
+  dashboardIcon: {
+    fontSize: 40,
+  },
+
+  dashboardWelcomeText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 26,
+  },
+
+  dashboardInfoText: {
+    fontSize: 15,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+
+  syncButton: {
+    marginTop: 8,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+
+  syncingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  logoutLink: {
+    marginTop: 24,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+
+  logoutLinkText: {
+    fontSize: 15,
+    color: '#6B7280',
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
 });

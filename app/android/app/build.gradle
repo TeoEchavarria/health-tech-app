@@ -90,7 +90,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "2.2.1"
+        versionName "1.0.0"
     }
     signingConfigs {
         debug {
@@ -140,10 +140,20 @@ android {
     }
 }
 
+project.ext.sentryCli = [
+    logLevel     : "debug",
+    autoUpload   : true,
+    propertiesFile : file("${rootDir}/android/sentry.properties")
+]
+
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
     implementation 'com.google.firebase:firebase-messaging:23.0.0'
+    
+    // Google Assistant App Actions support (Modern Shortcuts Framework)
+    implementation "com.google.assistant.appactions:suggestions:1.0.0"
+    androidTestImplementation "com.google.assistant.appactions:testing:1.0.0"
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";

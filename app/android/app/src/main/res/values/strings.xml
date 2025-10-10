@@ -1,6 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-  <string name="app_name">HCGateway</string>
-  <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
-  <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
-  <string name="expo_system_ui_user_interface_style" translatable="false">light</string>
+    <string name="app_name">Hacking Health</string>
+    
+    <!-- Google Assistant App Actions feature strings -->
+    <string name="sync_health_feature">sync health</string>
+    <string name="sync_health_feature_alt1">sync my health data</string>
+    <string name="sync_health_feature_alt2">sync health data</string>
+    <string name="sync_health_feature_alt3">update my health data</string>
+    
+    <!-- Shortcut labels (required for shortcuts.xml) -->
+    <string name="shortcut_short_label_sync">Sync health data</string>
+    <string name="shortcut_long_label_sync">Sync my health data with the backend</string>
+    <string name="shortcut_disabled_message_sync">Sync is currently unavailable</string>
 </resources>

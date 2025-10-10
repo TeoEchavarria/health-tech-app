@@ -2,12 +2,12 @@
 openapi: 3.0.0
 info:
   version: 2.2.0
-  title: HCGateway
+  title: Hacking Health
   description: ''
 servers:
 - url: https://api.hcgateway.shuchir.dev
 paths:
-  "/api/v2/login":
+  "/login":
     post:
       tags:
         - Authentication
@@ -20,13 +20,13 @@ paths:
             schema:
               "$ref": "#/components/schemas/loginParameters"
       responses:
-        '200':
+        '201':
           description: ''
           content:
             application/json:
               schema:
                 "$ref": "#/components/schemas/loginObject"
-  "/api/v2/refresh":
+  "/refresh":
     post:
       tags:
         - Authentication
@@ -49,8 +49,8 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/loginObject"
-  "/api/v2/revoke":
-    post:
+  "/revoke":
+    delete:
       tags:
         - Authentication
       operationId: revoke_token
@@ -65,8 +65,81 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/silentObject"
-  "/api/v2/fetch/{method}":
+  "/sync/{method}":
     post:
+      tags:
+        - Sync
+      operationId: sync
+      description: Sync data to the database.
+      security:
+      - bearerAuth: []
+      parameters:
+      - in: path
+        name: method
+        required: true
+        schema:
+          type: string
+        description: 'Can be one of the following: activeCaloriesBurned, basalBodyTemperature,
+          basalMetabolicRate, bloodGlucose, bloodPressure, bodyFat, bodyTemperature,
+          boneMass, cervicalMucus, distance, exerciseSession, elevationGained, floorsClimbed,
+          heartRate, height, hydration, leanBodyMass, menstruationFlow, menstruationPeriod,
+          nutrition, ovulationTest, oxygenSaturation, power, respiratoryRate, restingHeartRate,
+          sleepSession, speed, steps, stepsCadence, totalCaloriesBurned, vo2Max, weight,
+          wheelchairPushes'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                data:
+                  nullable: false
+                  type: array
+                  items:
+                    type: object
+                  description: The data to sync to the database.
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/silentObject"
+    delete:
+      tags:
+        - Sync
+      operationId: deleteFromDb
+      description: Delete records from the Hacking Health database.
+      security:
+      - bearerAuth: []
+      parameters:
+      - in: path
+        name: method
+        required: true
+        schema:
+          type: string
+        description: 'Can be one of the following: activeCaloriesBurned, basalBodyTemperature,
+          basalMetabolicRate, bloodGlucose, bloodPressure, bodyFat, bodyTemperature,
+          boneMass, cervicalMucus, distance, exerciseSession, elevationGained, floorsClimbed,
+          heartRate, height, hydration, leanBodyMass, menstruationFlow, menstruationPeriod,
+          nutrition, ovulationTest, oxygenSaturation, power, respiratoryRate, restingHeartRate,
+          sleepSession, speed, steps, stepsCadence, totalCaloriesBurned, vo2Max, weight,
+          wheelchairPushes'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              "$ref": "#/components/schemas/deleteParameters"
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/silentObject"
+  "/sync/{method}/fetch":
+    post:
+      tags:
+        - Sync
       operationId: fetch
       description: Get data from the database.
       security:
@@ -98,11 +171,13 @@ paths:
                 type: array
                 items:
                   "$ref": "#/components/schemas/dataObject"
-  "/api/v2/push/{method}":
+  "/sync/{method}/push":
     put:
+      tags:
+        - Sync
       operationId: pushData
       description: Insert data into your local Health Connect store. This method does
-        not add the data to the HCGateway database. This method is only used to push
+        not add the data to the Hacking Health database. This method is only used to push
         data to your local Health Connect store. This is so you can sync + fetch to
         verify the record has been added.
       security:
@@ -132,11 +207,13 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/silentObject"
-  "/api/v2/delete/{method}":
+  "/sync/{method}/delete":
     delete:
+      tags:
+        - Sync
       operationId: deleteData
       description: Request deletion for a record. This method does not delete the
-        record from the HCGateway database. This method is only used to request deletion
+        record from the Hacking Health database. This method is only used to request deletion
         of a record from your local Health Connect store. The app will delete it from
         the database using the sync method once it has deleted the record(s) locally.
       security:

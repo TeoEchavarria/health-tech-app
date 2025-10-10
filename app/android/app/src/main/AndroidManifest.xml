@@ -81,6 +81,11 @@
     </intent>
   </queries>
   <application android:name=".MainApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="true" android:theme="@style/AppTheme" android:usesCleartextTraffic="true">
+    <!-- Google Assistant App Actions (Modern Shortcuts Framework) -->
+    <meta-data
+      android:name="android.app.shortcuts"
+      android:resource="@xml/shortcuts" />
+    
     <meta-data android:name="com.supersami.foregroundservice.notification_channel_description" android:value="No description available."/>
     <meta-data android:name="com.supersami.foregroundservice.notification_channel_name" android:value="Persistent Sync Status"/>
     <meta-data android:name="com.supersami.foregroundservice.notification_color" android:resource="@color/blue"/>
@@ -104,6 +109,14 @@
         <data android:scheme="dev.shuchir.hcgateway"/>
         <data android:scheme="exp+hcgateway"/>
         <data android:scheme="com.echavarrias.hcgateway"/>
+        <data android:scheme="echavarrias"/>
+      </intent-filter>
+      <!-- Google Assistant App Actions intent filter -->
+      <intent-filter android:autoVerify="true">
+        <action android:name="android.intent.action.VIEW"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <data android:scheme="echavarrias" android:host="sync_health"/>
       </intent-filter>
       <intent-filter>
         <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"/>

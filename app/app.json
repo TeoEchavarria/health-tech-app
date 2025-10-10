@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "HCGateway",
-    "slug": "hcgateway",
+    "name": "Hacking Health",
+    "slug": "hacking-health",
     "version": "2.2.1",
     "plugins": [
       "expo-health-connect",
@@ -19,8 +19,8 @@
         "@sentry/react-native/expo",
         {
           "url": "https://sentry.io/",
-          "project": "hcgateway-app",
-          "organization": "shuchir-jain"
+          "project": "health-tech-app",
+          "organization": "inmortalteo"
         }
       ],
       "@react-native-firebase/app",

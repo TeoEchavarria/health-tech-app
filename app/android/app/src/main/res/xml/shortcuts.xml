@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Google Assistant App Actions - Modern Shortcuts Framework -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Capability: Open app feature for health data sync -->
+    <capability android:name="actions.intent.OPEN_APP_FEATURE">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.echavarrias.hcgateway"
+            android:targetClass="com.echavarrias.hcgateway.MainActivity">
+            <!-- Required parameter for OPEN_APP_FEATURE -->
+            <parameter android:name="feature" android:key="feature"/>
+        </intent>
+    </capability>
+
+    <!-- Shortcut that links the voice phrase to the deep link -->
+    <shortcut
+        android:shortcutId="sync_health"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/shortcut_short_label_sync"
+        android:shortcutLongLabel="@string/shortcut_long_label_sync"
+        android:shortcutDisabledMessage="@string/shortcut_disabled_message_sync">
+        
+        <!-- Bind this shortcut to the OPEN_APP_FEATURE capability -->
+        <capability-binding android:key="actions.intent.OPEN_APP_FEATURE">
+            <!-- Maps the "feature" parameter to "sync health" -->
+            <parameter-binding android:key="feature" android:value="@string/sync_health_feature"/>
+        </capability-binding>
+        
+        <!-- The actual deep link intent -->
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.echavarrias.hcgateway"
+            android:targetClass="com.echavarrias.hcgateway.MainActivity"
+            android:data="echavarrias://sync_health"/>
+        
+        <!-- Categories for the shortcut -->
+        <categories android:name="android.shortcut.conversation"/>
+    </shortcut>
+
+</shortcuts>
+
