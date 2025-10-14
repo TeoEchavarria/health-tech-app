@@ -1,7 +1,7 @@
 // Dashboard screen showing today's health metrics with charts
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity } from 'react-native';
-import { fetchRecordsForType } from '../services/healthSync';
+import { fetchRecordsForType, fetchLatestRecordForType } from '../services/healthSync';
 import { recordsToChartData } from '../utils/normalizeRecord';
 import { EventEmitter } from '../utils/eventBus';
 import { isoStartOfToday, isoNow, formatDateTime } from '../utils/dateHelpers';
@@ -47,7 +47,7 @@ export default function DashboardView({ navigation, onNavigateToSettings }) {
     loadToken();
   }, []);
 
-  // Load today's data for all metrics
+  // Load today's data for all metrics with fallback to latest record
   const loadToday = useCallback(async () => {
     setRefreshing(true);
     const start = isoStartOfToday();
@@ -59,17 +59,36 @@ export default function DashboardView({ navigation, onNavigateToSettings }) {
     await Promise.all(
       METRICS.map(async (metric) => {
         try {
-          const records = await fetchRecordsForType(metric.key, {
+          // First, try to get today's data
+          let records = await fetchRecordsForType(metric.key, {
             startTime: start,
             endTime: end
           });
           
+          let isFromToday = true;
+          
+          // If no data from today, fetch the latest record available
+          if (!records || records.length === 0) {
+            records = await fetchLatestRecordForType(metric.key);
+            isFromToday = false;
+          }
+          
           // Convert records to chart data
           const chartData = recordsToChartData(metric.key, records, 'time');
-          next[metric.key] = chartData;
+          
+          // Add metadata about the data source
+          next[metric.key] = {
+            data: chartData,
+            isFromToday: isFromToday,
+            recordDate: records.length > 0 ? (records[records.length - 1].startTime || records[records.length - 1].time) : null
+          };
         } catch (error) {
           console.warn(`Error fetching ${metric.key}:`, error);
-          next[metric.key] = [];
+          next[metric.key] = {
+            data: [],
+            isFromToday: true,
+            recordDate: null
+          };
         }
       })
     );
@@ -117,8 +136,8 @@ export default function DashboardView({ navigation, onNavigateToSettings }) {
   };
 
   // Calculate summary statistics
-  const totalDataPoints = Object.values(dataMap).reduce((sum, data) => sum + data.length, 0);
-  const metricsWithData = Object.values(dataMap).filter(data => data.length > 0).length;
+  const totalDataPoints = Object.values(dataMap).reduce((sum, metricData) => sum + (metricData.data?.length || 0), 0);
+  const metricsWithData = Object.values(dataMap).filter(metricData => metricData.data?.length > 0).length;
 
   return (
     <View style={styles.container}>
@@ -168,15 +187,20 @@ export default function DashboardView({ navigation, onNavigateToSettings }) {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.metricsList}>
-          {METRICS.map((metric) => (
-            <ChartCard
-              key={metric.key}
-              title={metric.title}
-              width="100%"
-              data={dataMap[metric.key] || []}
-              metricKey={metric.key}
-            />
-          ))}
+          {METRICS.map((metric) => {
+            const metricData = dataMap[metric.key] || { data: [], isFromToday: true, recordDate: null };
+            return (
+              <ChartCard
+                key={metric.key}
+                title={metric.title}
+                width="100%"
+                data={metricData.data || []}
+                metricKey={metric.key}
+                isFromToday={metricData.isFromToday}
+                recordDate={metricData.recordDate}
+              />
+            );
+          })}
         </View>
 
         {/* Settings Button */}

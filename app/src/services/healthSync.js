@@ -46,6 +46,50 @@ export async function fetchRecordsForType(recordType, { startTime = isoStartOfTo
 }
 
 /**
+ * Fetch the latest record for a specific type (no time limit)
+ * Searches from now backwards to find the most recent record
+ * @param {string} recordType - The type of health record to fetch
+ * @returns {Promise<Array>} Array with the latest record, or empty array
+ */
+export async function fetchLatestRecordForType(recordType) {
+  try {
+    await initialize();
+    
+    // Search backwards from now - Health Connect will return records sorted by time
+    // We go back far enough to find any historical data
+    const veryOldDate = new Date('2020-01-01').toISOString(); // Start from 2020 or earlier
+    const now = isoNow();
+    
+    const result = await readRecords(recordType, {
+      timeRangeFilter: {
+        operator: 'between',
+        startTime: veryOldDate,
+        endTime: now
+      }
+    });
+    
+    const records = result.records || [];
+    
+    // If we have records, return only the most recent one
+    if (records.length > 0) {
+      // Sort by time to ensure we get the latest (most recent first)
+      const sorted = records.sort((a, b) => {
+        const timeA = new Date(a.startTime || a.time).getTime();
+        const timeB = new Date(b.startTime || b.time).getTime();
+        return timeB - timeA; // Descending order (newest first)
+      });
+      
+      return [sorted[0]]; // Return as array for consistency
+    }
+    
+    return [];
+  } catch (error) {
+    console.error(`Error fetching latest record for ${recordType}:`, error);
+    return [];
+  }
+}
+
+/**
  * Fetch today's records for specific types
  * @param {Array<string>} types - Array of record types to fetch
  * @returns {Promise<Object>} Object mapping record types to their records
