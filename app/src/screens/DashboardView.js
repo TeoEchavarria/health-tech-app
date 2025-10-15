@@ -1,13 +1,14 @@
 // Dashboard screen showing today's health metrics with charts
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity } from 'react-native';
-import { fetchRecordsForType, fetchLatestRecordForType } from '../services/healthSync';
+import { fetchRecordsForType, fetchLatestRecordForType, ensureReadPermissions } from '../services/healthSync';
 import { recordsToChartData } from '../utils/normalizeRecord';
 import { EventEmitter } from '../utils/eventBus';
 import { isoStartOfToday, isoNow, formatDateTime } from '../utils/dateHelpers';
 import SyncButton from '../components/SyncButton';
 import ChartCard from '../components/ChartCard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Toast from 'react-native-toast-message';
 
 // Metrics to display on dashboard
 const METRICS = [
@@ -50,10 +51,25 @@ export default function DashboardView({ navigation, onNavigateToSettings }) {
   // Load today's data for all metrics with fallback to latest record
   const loadToday = useCallback(async () => {
     setRefreshing(true);
+    
+    // Ensure we have read permissions before attempting to fetch data
+    const hasPermissions = await ensureReadPermissions();
+    
+    if (!hasPermissions) {
+      Toast.show({
+        type: 'error',
+        text1: 'Permisos requeridos',
+        text2: 'Por favor otorga permisos de lectura para ver tus datos de salud',
+      });
+      setRefreshing(false);
+      return;
+    }
+    
     const start = isoStartOfToday();
     const end = isoNow();
 
     const next = {};
+    let totalRecordsFound = 0;
     
     // Fetch data for all metrics in parallel
     await Promise.all(
@@ -76,6 +92,10 @@ export default function DashboardView({ navigation, onNavigateToSettings }) {
           // Convert records to chart data
           const chartData = recordsToChartData(metric.key, records, 'time');
           
+          if (chartData.length > 0) {
+            totalRecordsFound += chartData.length;
+          }
+          
           // Add metadata about the data source
           next[metric.key] = {
             data: chartData,
@@ -95,6 +115,16 @@ export default function DashboardView({ navigation, onNavigateToSettings }) {
     
     setDataMap(next);
     setRefreshing(false);
+    
+    // Show a toast if no data was found at all
+    if (totalRecordsFound === 0) {
+      Toast.show({
+        type: 'info',
+        text1: 'No hay datos disponibles',
+        text2: 'Intenta sincronizar tus datos de Health Connect',
+        position: 'bottom',
+      });
+    }
   }, []);
 
   // Initial load

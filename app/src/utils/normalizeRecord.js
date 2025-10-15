@@ -49,7 +49,82 @@ function tryPaths(record, ...paths) {
 }
 
 /**
+ * Check if a record is in the new aggregated format
+ * @param {Object} record - The health record object
+ * @returns {boolean} True if aggregated format
+ */
+function isAggregatedRecord(record) {
+  return record && (
+    record.hasOwnProperty('aggregate') ||
+    record.hasOwnProperty('hourly') ||
+    record.hasOwnProperty('measurements') ||
+    record.hasOwnProperty('sessions') ||
+    record.hasOwnProperty('entries')
+  );
+}
+
+/**
+ * Extract value from aggregated record
+ * @param {string} recordType - The type of health record
+ * @param {Object} record - The aggregated health record object
+ * @returns {number|Object|null} The normalized value(s) or null
+ */
+function normalizeAggregatedRecord(recordType, record) {
+  if (!record) return null;
+
+  // Category 1: Cumulative (has aggregate.total)
+  if (record.aggregate && record.aggregate.total !== undefined) {
+    return record.aggregate.total;
+  }
+
+  // Category 2: Instantaneous (has aggregate.value)
+  if (record.aggregate && record.aggregate.value !== undefined) {
+    return record.aggregate.value;
+  }
+
+  // Category 3: Hourly (has aggregate.dailyAvg and hourly array)
+  if (record.aggregate && record.aggregate.dailyAvg !== undefined) {
+    return record.aggregate.dailyAvg;
+  }
+
+  // Category 4: Medical measurements (get latest)
+  if (record.measurements && Array.isArray(record.measurements)) {
+    if (record.measurements.length > 0) {
+      const latest = record.measurements[record.measurements.length - 1];
+      
+      // Special handling for blood pressure
+      if (recordType === 'BloodPressure' || recordType === 'bloodPressure') {
+        return {
+          systolic: latest.systolic || null,
+          diastolic: latest.diastolic || null
+        };
+      }
+      
+      // Generic measurement value
+      return latest.data?.value || null;
+    }
+    return null;
+  }
+
+  // Category 5: Sessions (get total duration)
+  if (record.sessions && Array.isArray(record.sessions)) {
+    if (record.aggregate && record.aggregate.totalDurationMinutes !== undefined) {
+      return record.aggregate.totalDurationMinutes;
+    }
+    return null;
+  }
+
+  // Category 6: Reproductive (count entries)
+  if (record.entries && Array.isArray(record.entries)) {
+    return record.entries.length;
+  }
+
+  return null;
+}
+
+/**
  * Normalize a health record to extract its numeric value(s)
+ * Handles both legacy individual records and new aggregated records
  * @param {string} recordType - The type of health record
  * @param {Object} record - The health record object
  * @returns {number|Object|null} The normalized value(s) or null
@@ -57,6 +132,12 @@ function tryPaths(record, ...paths) {
 export function normalizeRecordValue(recordType, record) {
   if (!record) return null;
   
+  // Check if it's an aggregated record (new format)
+  if (isAggregatedRecord(record)) {
+    return normalizeAggregatedRecord(recordType, record);
+  }
+  
+  // Legacy format handling
   switch (recordType) {
     case 'Vo2Max':
       return tryPaths(record, 'vo2MillilitersPerMinuteKilogram', 'vo2Max', 'value', 'samples.0.value');
@@ -180,7 +261,55 @@ export function normalizeRecordValue(recordType, record) {
 }
 
 /**
+ * Get hourly data from an aggregated record
+ * @param {Object} record - The aggregated health record
+ * @returns {Array|null} Array of hourly data points or null
+ */
+export function getHourlyData(record) {
+  if (!record || !record.hourly || !Array.isArray(record.hourly)) {
+    return null;
+  }
+  
+  return record.hourly.map(hourData => ({
+    hour: hourData.hour,
+    avg: hourData.avg,
+    min: hourData.min,
+    max: hourData.max,
+    samples: hourData.samples,
+    x: `${hourData.hour}:00`,
+    y: hourData.avg
+  }));
+}
+
+/**
+ * Get measurements from an aggregated record
+ * @param {Object} record - The aggregated health record
+ * @returns {Array|null} Array of measurements or null
+ */
+export function getMeasurements(record) {
+  if (!record || !record.measurements || !Array.isArray(record.measurements)) {
+    return null;
+  }
+  
+  return record.measurements;
+}
+
+/**
+ * Get sessions from an aggregated record
+ * @param {Object} record - The aggregated health record
+ * @returns {Array|null} Array of sessions or null
+ */
+export function getSessions(record) {
+  if (!record || !record.sessions || !Array.isArray(record.sessions)) {
+    return null;
+  }
+  
+  return record.sessions;
+}
+
+/**
  * Convert a health record to a chart data point
+ * Handles both aggregated and legacy formats
  * @param {string} recordType - The type of health record
  * @param {Object} record - The health record object
  * @param {string} xFormat - Format for x-axis ('time', 'date', 'datetime')
@@ -195,9 +324,16 @@ export function recordToChartPoint(recordType, record, xFormat = 'time') {
     return null;
   }
   
+  // For aggregated records, use the date field
+  let timestamp;
+  if (isAggregatedRecord(record)) {
+    timestamp = record.date ? new Date(record.date) : new Date();
+  } else {
+    timestamp = new Date(record.startTime || record.time);
+  }
+  
   // Determine x-axis label based on format
   let xLabel;
-  const timestamp = new Date(record.startTime || record.time);
   
   switch (xFormat) {
     case 'time':
@@ -214,19 +350,21 @@ export function recordToChartPoint(recordType, record, xFormat = 'time') {
   }
   
   // Handle special cases like Blood Pressure which has multiple values
-  if (recordType === 'BloodPressure' && value.systolic !== null) {
+  if ((recordType === 'BloodPressure' || recordType === 'bloodPressure') && value.systolic !== null) {
     return {
       x: xLabel,
       y: value.systolic,
       secondary: value.diastolic,
-      timestamp: record.startTime || record.time
+      timestamp: isAggregatedRecord(record) ? record.date : (record.startTime || record.time),
+      hourly: getHourlyData(record)
     };
   }
   
   return {
     x: xLabel,
     y: typeof value === 'number' ? value : null,
-    timestamp: record.startTime || record.time
+    timestamp: isAggregatedRecord(record) ? record.date : (record.startTime || record.time),
+    hourly: getHourlyData(record)
   };
 }
 

@@ -5,7 +5,7 @@ const config = {
   // Examples:
   // - For local development (Android emulator): 'http://10.0.2.2:8000'
   // - For production: 'https://api.hcgateway.shuchir.dev'
-  apiBaseUrl: 'https://apihealth.echavarrias.com',
+  apiBaseUrl: 'https://apihealth.echavarrias.com', //'http://10.0.2.2:8000', 
   
   // Default sync interval in hours
   defaultSyncIntervalHours: 2,

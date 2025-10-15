@@ -45,25 +45,61 @@ export default function ChartCard({
   let displayValue;
   let displayLabel;
   let secondaryValue = null;
+  let hasHourlyData = false;
+  let recordCount = data.length;
   
-  if (isCumulative) {
-    // Sum all values for cumulative metrics
-    displayValue = Math.round(data.reduce((sum, d) => sum + (d.y || 0), 0) * 10) / 10;
-    displayLabel = isFromToday ? 'Total del día' : 'Último registro';
-  } else if (isInstantaneous || isBP) {
-    // Show latest value for instantaneous metrics
-    const latest = data[data.length - 1];
-    displayValue = latest.y;
-    displayLabel = isFromToday ? 'Última medición' : 'Último registro';
-    
-    // For blood pressure, also get diastolic
-    if (isBP && latest.secondary) {
-      secondaryValue = latest.secondary;
+  // Check if we have aggregated data (new format)
+  const firstRecord = data[0];
+  const isAggregated = firstRecord && (firstRecord.aggregate || firstRecord.hourly || firstRecord.measurements);
+  
+  if (isAggregated && firstRecord.aggregate) {
+    // New aggregated format
+    if (firstRecord.aggregate.total !== undefined) {
+      // Category 1: Cumulative
+      displayValue = Math.round(firstRecord.aggregate.total * 10) / 10;
+      displayLabel = 'Total del día';
+      recordCount = firstRecord.aggregate.recordCount || 1;
+    } else if (firstRecord.aggregate.value !== undefined) {
+      // Category 2: Instantaneous
+      displayValue = firstRecord.aggregate.value;
+      displayLabel = firstRecord.aggregate.timestamp ? 'Última medición' : 'Valor del día';
+      recordCount = firstRecord.aggregate.recordCount || 1;
+    } else if (firstRecord.aggregate.dailyAvg !== undefined) {
+      // Category 3: Hourly (show daily average)
+      displayValue = Math.round(firstRecord.aggregate.dailyAvg * 10) / 10;
+      displayLabel = 'Promedio del día';
+      recordCount = firstRecord.aggregate.totalSamples || 1;
+      hasHourlyData = firstRecord.hourly && firstRecord.hourly.length > 0;
+    } else if (firstRecord.aggregate.totalDurationMinutes !== undefined) {
+      // Category 5: Sessions
+      displayValue = firstRecord.aggregate.totalDurationMinutes;
+      displayLabel = 'Total del día';
+      recordCount = firstRecord.aggregate.totalSessions || 1;
     }
   } else {
-    // Default: show average
-    displayValue = Math.round((data.reduce((sum, d) => sum + (d.y || 0), 0) / data.length) * 10) / 10;
-    displayLabel = isFromToday ? 'Promedio del día' : 'Último registro';
+    // Legacy format (individual records)
+    if (isCumulative) {
+      // Sum all values for cumulative metrics
+      displayValue = Math.round(data.reduce((sum, d) => sum + (d.y || 0), 0) * 10) / 10;
+      displayLabel = isFromToday ? 'Total del día' : 'Último registro';
+    } else if (isInstantaneous || isBP) {
+      // Show latest value for instantaneous metrics
+      const latest = data[data.length - 1];
+      displayValue = latest.y;
+      displayLabel = isFromToday ? 'Última medición' : 'Último registro';
+      
+      // For blood pressure, also get diastolic
+      if (isBP && latest.secondary) {
+        secondaryValue = latest.secondary;
+      }
+      
+      // Check for hourly data in the point
+      hasHourlyData = latest.hourly && latest.hourly.length > 0;
+    } else {
+      // Default: show average
+      displayValue = Math.round((data.reduce((sum, d) => sum + (d.y || 0), 0) / data.length) * 10) / 10;
+      displayLabel = isFromToday ? 'Promedio del día' : 'Último registro';
+    }
   }
   
   // Format record date for display if not from today
@@ -132,15 +168,20 @@ export default function ChartCard({
 
       <View style={styles.footer}>
         <Text style={styles.dataCount}>
-          {data.length} {data.length === 1 ? 'registro' : 'registros'}
+          {recordCount} {recordCount === 1 ? 'registro' : 'registros'}
+          {hasHourlyData ? ' • Datos horarios disponibles' : ''}
         </Text>
         {!isFromToday && recordDate ? (
           <Text style={styles.historicDate}>
             📅 {formatRecordDate(recordDate)}
           </Text>
-        ) : data.length > 0 ? (
+        ) : data.length > 0 && !isAggregated ? (
           <Text style={styles.timestamp}>
             {data[data.length - 1].x}
+          </Text>
+        ) : isAggregated && firstRecord.date ? (
+          <Text style={styles.timestamp}>
+            {formatRecordDate(firstRecord.date)}
           </Text>
         ) : null}
       </View>

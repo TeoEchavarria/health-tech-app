@@ -3,8 +3,8 @@
 
 import { apiClient } from './api';
 import { 
-  readRecords, 
-  readRecord, 
+  readRecords,
+  readRecord,
   initialize, 
   RECORD_TYPES,
   getAllPermissions,
@@ -12,11 +12,64 @@ import {
   requestPermissionsIfNeeded 
 } from '../native/healthConnect';
 import { EventEmitter } from '../utils/eventBus';
-import { sleep } from '../utils/sleep';
 import { isoStartOfToday, isoNow, isoDaysAgo } from '../utils/dateHelpers';
 
-// Record types that require special handling (one-by-one posting with delay)
-const SPECIAL_TYPES = new Set(['SleepSession', 'Speed', 'HeartRate']);
+// NOTE: All record types are now sent in bulk to the backend
+// The backend handles aggregation, outlier removal, and efficient storage with bulk operations
+// No special handling needed - one request per record type with all records
+
+/**
+ * Ensure read permissions are granted before fetching data
+ * @returns {Promise<boolean>} True if all read permissions are granted
+ */
+export async function ensureReadPermissions() {
+  try {
+    await initialize();
+    
+    // Get only read permissions (not write)
+    const allPermissions = getAllPermissions();
+    const readPermissions = allPermissions.filter(p => p.accessType === 'read');
+    
+    const { allGranted, missing } = await checkPermissions(readPermissions);
+    
+    if (!allGranted) {
+      console.log(`⚠️ Missing ${missing.length} read permissions, requesting...`);
+      const result = await requestPermissionsIfNeeded(readPermissions);
+      
+      if (!result.success) {
+        console.error('❌ Failed to obtain read permissions');
+        return false;
+      }
+      
+      console.log('✅ All read permissions granted');
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error ensuring read permissions:', error);
+    return false;
+  }
+}
+
+/**
+ * Fetch a single record by ID
+ * @param {string} recordType - The type of health record to fetch
+ * @param {string} recordId - The unique ID of the record
+ * @returns {Promise<Array>} Array with single record or empty array
+ */
+export async function fetchRecordById(recordType, recordId) {
+  try {
+    await initialize();
+    
+    console.log(`📖 Fetching single record: ${recordType} with ID ${recordId}`);
+    const record = await readRecord(recordType, recordId);
+    
+    return record ? [record] : [];
+  } catch (error) {
+    console.error(`Error fetching record by ID for ${recordType}:`, error);
+    return [];
+  }
+}
 
 /**
  * Fetch records for a specific type within a time range
@@ -30,6 +83,8 @@ export async function fetchRecordsForType(recordType, { startTime = isoStartOfTo
   try {
     await initialize();
     
+    console.log(`📖 Fetching ${recordType} from ${startTime} to ${endTime}`);
+    
     const result = await readRecords(recordType, {
       timeRangeFilter: {
         operator: 'between',
@@ -38,7 +93,15 @@ export async function fetchRecordsForType(recordType, { startTime = isoStartOfTo
       }
     });
     
-    return result.records || [];
+    const records = result.records || [];
+    
+    if (records.length === 0) {
+      console.log(`⚠️ No records found for ${recordType} in the specified time range`);
+    } else {
+      console.log(`✅ Found ${records.length} records for ${recordType}`);
+    }
+    
+    return records;
   } catch (error) {
     console.error(`Error fetching records for ${recordType}:`, error);
     return [];
@@ -49,16 +112,26 @@ export async function fetchRecordsForType(recordType, { startTime = isoStartOfTo
  * Fetch the latest record for a specific type (no time limit)
  * Searches from now backwards to find the most recent record
  * @param {string} recordType - The type of health record to fetch
+ * @param {Object} options - Options for fetching
+ * @param {string} options.id - Optional record ID for fetching a specific record
  * @returns {Promise<Array>} Array with the latest record, or empty array
  */
-export async function fetchLatestRecordForType(recordType) {
+export async function fetchLatestRecordForType(recordType, { id } = {}) {
   try {
     await initialize();
+    
+    // If ID is provided, fetch that specific record
+    if (id) {
+      console.log(`📖 Fetching specific record ${recordType} with ID ${id}`);
+      return await fetchRecordById(recordType, id);
+    }
     
     // Search backwards from now - Health Connect will return records sorted by time
     // We go back far enough to find any historical data
     const veryOldDate = new Date('2020-01-01').toISOString(); // Start from 2020 or earlier
     const now = isoNow();
+    
+    console.log(`📖 Fetching latest ${recordType} record (searching from 2020)`);
     
     const result = await readRecords(recordType, {
       timeRangeFilter: {
@@ -79,9 +152,11 @@ export async function fetchLatestRecordForType(recordType) {
         return timeB - timeA; // Descending order (newest first)
       });
       
+      console.log(`✅ Found latest ${recordType} record from ${sorted[0].startTime || sorted[0].time}`);
       return [sorted[0]]; // Return as array for consistency
     }
     
+    console.log(`⚠️ No historical records found for ${recordType}`);
     return [];
   } catch (error) {
     console.error(`Error fetching latest record for ${recordType}:`, error);
@@ -190,6 +265,7 @@ export async function syncAll({
     }
     
     // Second pass: sync to server
+    // All types are now sent in bulk - backend handles aggregation efficiently
     for (const type of RECORD_TYPES) {
       const records = recordCounts[type];
       
@@ -197,61 +273,30 @@ export async function syncAll({
         continue;
       }
       
-      // Special handling for certain types (one-by-one with delay)
-      if (SPECIAL_TYPES.has(type)) {
-        for (let j = 0; j < records.length; j++) {
-          try {
-            // Read full record with detailed data
-            const fullRecord = await readRecord(type, records[j].metadata.id);
-            
-            // Post to server
-            await apiClient.post(`/sync/${type}`, {
-              data: fullRecord
-            });
-            
-            syncedRecords++;
-            
-            // Emit progress update
-            if (onProgress) {
-              onProgress({
-                current: syncedRecords,
-                total: totalRecords,
-                phase: 'syncing',
-                currentType: type
-              });
-            }
-            
-            // Delay between requests to be server-friendly (preserve original behavior)
-            if (j < records.length - 1) {
-              await sleep(3000);
-            }
-          } catch (error) {
-            console.error(`Error syncing ${type} record:`, error);
-            // Continue with next record even if this one fails
-          }
-        }
-      } else {
-        // Bulk post for other types
-        try {
-          await apiClient.post(`/sync/${type}`, {
-            data: records
+      // Send ALL records for this type in ONE request
+      try {
+        console.log(`📤 Syncing ${type}: ${records.length} records in ONE bulk request`);
+        
+        await apiClient.post(`/sync/${type}`, {
+          data: records  // Send all records at once
+        });
+        
+        syncedRecords += records.length;
+        
+        // Emit progress update
+        if (onProgress) {
+          onProgress({
+            current: syncedRecords,
+            total: totalRecords,
+            phase: 'syncing',
+            currentType: type
           });
-          
-          syncedRecords += records.length;
-          
-          // Emit progress update
-          if (onProgress) {
-            onProgress({
-              current: syncedRecords,
-              total: totalRecords,
-              phase: 'syncing',
-              currentType: type
-            });
-          }
-        } catch (error) {
-          console.error(`Error bulk syncing ${type}:`, error);
-          // Continue with next type even if this one fails
         }
+        
+        console.log(`✅ Successfully synced ${records.length} ${type} records`);
+      } catch (error) {
+        console.error(`❌ Error bulk syncing ${type}:`, error);
+        // Continue with next type even if this one fails
       }
     }
     
@@ -313,34 +358,19 @@ export async function syncSpecificTypes(types, options = {}) {
         
         if (records.length === 0) continue;
         
-        if (SPECIAL_TYPES.has(type)) {
-          // One-by-one for special types
-          for (const record of records) {
-            try {
-              const fullRecord = await readRecord(type, record.metadata.id);
-              await apiClient.post(`/sync/${type}`, { data: fullRecord });
-              syncedRecords++;
-              
-              if (onProgress) {
-                onProgress({ current: syncedRecords, total: totalRecords });
-              }
-              
-              await sleep(3000);
-            } catch (error) {
-              console.error(`Error syncing ${type}:`, error);
-            }
-          }
-        } else {
-          // Bulk post
-          await apiClient.post(`/sync/${type}`, { data: records });
-          syncedRecords += records.length;
-          
-          if (onProgress) {
-            onProgress({ current: syncedRecords, total: totalRecords });
-          }
+        // Send ALL records in ONE bulk request
+        console.log(`📤 Syncing ${type}: ${records.length} records in ONE bulk request`);
+        
+        await apiClient.post(`/sync/${type}`, { data: records });
+        syncedRecords += records.length;
+        
+        if (onProgress) {
+          onProgress({ current: syncedRecords, total: totalRecords });
         }
+        
+        console.log(`✅ Successfully synced ${records.length} ${type} records`);
       } catch (error) {
-        console.error(`Error processing ${type}:`, error);
+        console.error(`❌ Error processing ${type}:`, error);
       }
     }
     
@@ -360,8 +390,8 @@ export async function syncSpecificTypes(types, options = {}) {
 export function getSyncStats() {
   return {
     totalTypes: RECORD_TYPES.length,
-    specialTypes: Array.from(SPECIAL_TYPES),
-    allTypes: RECORD_TYPES
+    allTypes: RECORD_TYPES,
+    syncMode: 'bulk'  // All types use bulk sync now
   };
 }
 
