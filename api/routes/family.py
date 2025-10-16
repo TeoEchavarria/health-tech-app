@@ -69,6 +69,33 @@ def validate_user_exists(user_id: str) -> bool:
     except InvalidId:
         return False
 
+def normalize_fridge_keys(fridge_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Normalize all keys in the fridge data to lowercase.
+    Handles nested dictionaries recursively.
+    """
+    if not isinstance(fridge_data, dict):
+        return fridge_data
+    
+    normalized = {}
+    for key, value in fridge_data.items():
+        # Convert key to lowercase
+        normalized_key = key.lower()
+        
+        # If value is a dict, recursively normalize it
+        if isinstance(value, dict):
+            normalized[normalized_key] = normalize_fridge_keys(value)
+        # If value is a list, check if it contains dicts and normalize them
+        elif isinstance(value, list):
+            normalized[normalized_key] = [
+                normalize_fridge_keys(item) if isinstance(item, dict) else item
+                for item in value
+            ]
+        else:
+            normalized[normalized_key] = value
+    
+    return normalized
+
 # ============================================================================
 # Routes
 # ============================================================================
@@ -326,6 +353,7 @@ def update_family_fridge(
 ):
     """
     Update the fridge data for a family. Only family members can update the fridge.
+    All keys are automatically normalized to lowercase.
     """
     families = get_family_collection()
     
@@ -341,12 +369,15 @@ def update_family_fridge(
             detail="Only family members can update the fridge"
         )
     
+    # Normalize all keys to lowercase
+    normalized_fridge = normalize_fridge_keys(request.fridge)
+    
     # Update the fridge
     families.update_one(
         {"_id": family_id},
         {
             "$set": {
-                "fridge": request.fridge,
+                "fridge": normalized_fridge,
                 "updated_at": datetime.datetime.now()
             }
         }
@@ -369,6 +400,7 @@ def patch_family_fridge(
 ):
     """
     Partially update the fridge data (merge with existing). Only family members can update.
+    All keys are automatically normalized to lowercase.
     """
     families = get_family_collection()
     
@@ -384,9 +416,12 @@ def patch_family_fridge(
             detail="Only family members can update the fridge"
         )
     
-    # Merge the fridge data
+    # Normalize incoming data keys to lowercase
+    normalized_new_data = normalize_fridge_keys(request.fridge)
+    
+    # Merge the fridge data (current fridge should already be normalized from previous updates)
     current_fridge = family.get("fridge", {})
-    current_fridge.update(request.fridge)
+    current_fridge.update(normalized_new_data)
     
     families.update_one(
         {"_id": family_id},
