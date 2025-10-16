@@ -36,6 +36,29 @@ class SuccessResponse(BaseModel):
 
 # Auth dependency
 def verify_token(authorization: Optional[str] = Header(None)) -> str:
+    # In DEV mode, skip authorization and return a default test user
+    if settings.APP_DEBUG:
+        db = mongo[settings.MONGO_DB]
+        usrStore = db['users']
+        
+        # Try to find the first user, or create a test user if none exists
+        test_user = usrStore.find_one()
+        if test_user:
+            print(f"[DEV MODE] Using test user: {test_user['_id']}")
+            return test_user['_id']
+        
+        # Create a test user if no users exist
+        test_user_id = 'dev-test-user'
+        usrStore.insert_one({
+            '_id': test_user_id,
+            'username': 'dev-test-user',
+            'password': ph.hash('dev'),
+            'families': []
+        })
+        print(f"[DEV MODE] Created and using test user: {test_user_id}")
+        return test_user_id
+    
+    # Production mode - require valid authorization
     if not authorization:
         raise HTTPException(status_code=400, detail='no token provided')
     
