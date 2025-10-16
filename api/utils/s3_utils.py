@@ -3,7 +3,7 @@ from botocore.exceptions import ClientError
 from typing import BinaryIO, Union
 from datetime import datetime
 import uuid
-from api.config import settings
+from config import settings
 
 
 class S3Manager:
