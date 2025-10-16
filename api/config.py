@@ -15,4 +15,12 @@ class Settings(BaseSettings):
     # ── FCM ─────────────────────────────────────────────────────────
     FCM_PROJECT_ID: str = Field(..., env="FCM_PROJECT_ID")
 
+    # ── Food AI ────────────────────────────────────────────────────
+    OPENAI_API_KEY: str = Field(..., env="OPENAI_API_KEY")
+
+    # -- AWS ────────────────────────────────────────────────────────
+    AWS_ACCESS_KEY_ID: str = Field(..., env="AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY: str = Field(..., env="AWS_SECRET_ACCESS_KEY")
+    AWS_S3_BUCKET: str = Field(..., env="AWS_S3_BUCKET")
+
 settings = Settings()
