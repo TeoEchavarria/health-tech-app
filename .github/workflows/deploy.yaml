@@ -3,38 +3,56 @@ name: Deploy to EC2 🚀
 on:
   push:
     branches:
-      - "main" # This triggers the workflow on push to any branch
+      - "main"
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}     # ej: us-east-2
+      EC2_SG_ID: ${{ secrets.EC2_SG_ID }}       # ej: sg-0008422af96586311
+
     steps:
       - name: Checkout current branch ✅
         uses: actions/checkout@v2
 
-      - name: Set up SSH key and whitelist EC2 IP address 🐻‍❄️
+      # (Opción simple con access keys) - si usas OIDC, reemplaza este bloque por configure-aws-credentials con role-to-assume
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Setup AWS CLI
+        uses: aws-actions/setup-aws-cli@v2
+
+      - name: Allow runner IP on SG (open SSH 22 temporarily) 🔓
+        id: allow_ssh
+        shell: bash
+        run: |
+          set -e
+          MYIP="$(curl -s https://checkip.amazonaws.com)"
+          echo "runner_ip=${MYIP}" >> $GITHUB_OUTPUT
+          CIDR="${MYIP}/32"
+          echo "🧭 Runner public IP: $CIDR"
+          # Intentamos autorizar; si ya existe, continuamos
+          aws ec2 authorize-security-group-ingress \
+            --group-id "${EC2_SG_ID}" \
+            --protocol tcp \
+            --port 22 \
+            --cidr  "${CIDR}" \
+            --region "${AWS_REGION}" || echo "⚠️  Regla ya existía (ok)"
+
+      - name: Set up SSH key 🔑
         env:
-          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-          EC2_HOST: ${{ secrets.EC2_HOST }}
+          SSH_KEY:   ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST:  ${{ secrets.EC2_HOST }}
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          
-          # Verify SSH key was created
-          if [ ! -f ~/.ssh/id_rsa ]; then
-            echo "Error: SSH key file not created"
-            exit 1
-          fi
-          
-          echo "SSH key file size: $(wc -c < ~/.ssh/id_rsa) bytes"
-          echo "SSH key first line: $(head -n1 ~/.ssh/id_rsa)"
-          
-          # Add host to known_hosts
-          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>&1 || echo "Warning: ssh-keyscan failed, continuing anyway"
-          
-          # Test SSH connection
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${{ secrets.EC2_USERNAME }}@"$EC2_HOST" "echo 'SSH connection successful'" || echo "Warning: SSH test failed"
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Build Docker image 🐳
         run: |
@@ -78,7 +96,7 @@ jobs:
 
       - name: Copy files to EC2 🚙
         env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_HOST:     ${{ secrets.EC2_HOST }}
           EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
         run: |
           echo "Connecting to: ${EC2_USERNAME}@${EC2_HOST}"
@@ -89,22 +107,18 @@ jobs:
 
       - name: Deploy on EC2 🚀
         env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_HOST:     ${{ secrets.EC2_HOST }}
           EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
         run: |
           ssh -o StrictHostKeyChecking=no "${EC2_USERNAME}@${EC2_HOST}" << 'EOF'
             cd /home/ec2-user/api-health
-            
             echo "🛑 Stopping existing container..."
             sudo docker stop api-health 2>/dev/null || true
             sudo docker rm api-health 2>/dev/null || true
-            
             echo "🗑️  Removing old images..."
             sudo docker rmi api-health:latest 2>/dev/null || true
-            
             echo "📦 Loading new Docker image..."
             gunzip -c api-health.tar.gz | sudo docker load
-            
             echo "🚀 Starting new container..."
             sudo docker run -d \
               --name api-health \
@@ -113,18 +127,31 @@ jobs:
               --env-file .env \
               -v /home/ec2-user/api-health/service-account.json:/app/service-account.json:ro \
               api-health:latest
-            
             echo "✅ Container status:"
-            sudo docker ps | grep api-health
-            
+            sudo docker ps | grep api-health || true
             echo "📋 Recent logs:"
-            sudo docker logs --tail=50 api-health
-            
+            sudo docker logs --tail=50 api-health || true
             echo "🧹 Cleaning up old Docker images..."
             sudo docker image prune -f
-            
             echo "✅ Deployment completed!"
           EOF
+
+      - name: Revoke runner IP from SG (close SSH) 🔒
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${{ steps.allow_ssh.outputs.runner_ip }}" ]; then
+            CIDR="${{ steps.allow_ssh.outputs.runner_ip }}/32"
+            echo "Revoking $CIDR from ${EC2_SG_ID}..."
+            aws ec2 revoke-security-group-ingress \
+              --group-id "${EC2_SG_ID}" \
+              --protocol tcp \
+              --port 22 \
+              --cidr  "${CIDR}" \
+              --region "${AWS_REGION}" || echo "⚠️  No se pudo revocar (tal vez ya no existía)"
+          else
+            echo "No runner_ip output; nothing to revoke."
+          fi
 
       - name: Clean up files 🧹
         if: always()
