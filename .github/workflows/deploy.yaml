@@ -15,9 +15,9 @@ jobs:
       - name: Set up SSH key and whitelist EC2 IP address 🐻‍❄️
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          echo -e "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
       - name: Build Docker image 🐳
         run: |
@@ -91,7 +91,7 @@ jobs:
             docker run -d \
               --name api-health \
               --restart always \
-              -p 8080:8080 \
+              -p 6644:6644 \
               --env-file .env \
               -v /home/ec2-user/api-health/service-account.json:/app/service-account.json:ro \
               api-health:latest
