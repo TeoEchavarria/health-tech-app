@@ -24,8 +24,8 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ env.AWS_REGION }}
 
-      - name: Setup AWS CLI
-        uses: aws-actions/setup-aws-cli@v2
+      - name: Check AWS CLI
+        run: aws --version
 
       - name: Allow runner IP on SG (open SSH 22 temporarily) 🔓
         id: allow_ssh
