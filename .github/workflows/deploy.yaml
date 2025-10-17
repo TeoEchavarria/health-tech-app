@@ -81,31 +81,32 @@ jobs:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
         run: |
-          ssh $EC2_USERNAME@$EC2_HOST "mkdir -p /home/ec2-user/api-health"
-          scp api-health.tar.gz $EC2_USERNAME@$EC2_HOST:/home/ec2-user/api-health/
-          scp .env $EC2_USERNAME@$EC2_HOST:/home/ec2-user/api-health/
-          scp service-account.json $EC2_USERNAME@$EC2_HOST:/home/ec2-user/api-health/
+          echo "Connecting to: ${EC2_USERNAME}@${EC2_HOST}"
+          ssh -o StrictHostKeyChecking=no "${EC2_USERNAME}@${EC2_HOST}" "mkdir -p /home/ec2-user/api-health"
+          scp -o StrictHostKeyChecking=no api-health.tar.gz "${EC2_USERNAME}@${EC2_HOST}:/home/ec2-user/api-health/"
+          scp -o StrictHostKeyChecking=no .env "${EC2_USERNAME}@${EC2_HOST}:/home/ec2-user/api-health/"
+          scp -o StrictHostKeyChecking=no service-account.json "${EC2_USERNAME}@${EC2_HOST}:/home/ec2-user/api-health/"
 
       - name: Deploy on EC2 🚀
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
         run: |
-          ssh -o StrictHostKeyChecking=no $EC2_USERNAME@$EC2_HOST << 'EOF'
+          ssh -o StrictHostKeyChecking=no "${EC2_USERNAME}@${EC2_HOST}" << 'EOF'
             cd /home/ec2-user/api-health
             
             echo "🛑 Stopping existing container..."
-            docker stop api-health 2>/dev/null || true
-            docker rm api-health 2>/dev/null || true
+            sudo docker stop api-health 2>/dev/null || true
+            sudo docker rm api-health 2>/dev/null || true
             
             echo "🗑️  Removing old images..."
-            docker rmi api-health:latest 2>/dev/null || true
+            sudo docker rmi api-health:latest 2>/dev/null || true
             
             echo "📦 Loading new Docker image..."
-            gunzip -c api-health.tar.gz | docker load
+            gunzip -c api-health.tar.gz | sudo docker load
             
             echo "🚀 Starting new container..."
-            docker run -d \
+            sudo docker run -d \
               --name api-health \
               --restart always \
               -p 8080:8080 \
@@ -114,13 +115,13 @@ jobs:
               api-health:latest
             
             echo "✅ Container status:"
-            docker ps | grep api-health
+            sudo docker ps | grep api-health
             
             echo "📋 Recent logs:"
-            docker logs --tail=50 api-health
+            sudo docker logs --tail=50 api-health
             
             echo "🧹 Cleaning up old Docker images..."
-            docker image prune -f
+            sudo docker image prune -f
             
             echo "✅ Deployment completed!"
           EOF
