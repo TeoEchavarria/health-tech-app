@@ -91,7 +91,7 @@ jobs:
             docker run -d \
               --name api-health \
               --restart always \
-              -p 6644:6644 \
+              -p 8080:8080 \
               --env-file .env \
               -v /home/ec2-user/api-health/service-account.json:/app/service-account.json:ro \
               api-health:latest
