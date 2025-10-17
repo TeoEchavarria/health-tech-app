@@ -10,9 +10,13 @@ import statistics
 
 
 # Data category definitions
-CATEGORY_1_CUMULATIVE = {
-    "steps", "distance", "activeCaloriesBurned", "totalCaloriesBurned",
+CATEGORY_1_CUMULATIVE_SUM = {
+    "distance", "activeCaloriesBurned", "totalCaloriesBurned",
     "floorsClimbed", "elevationGained", "hydration", "wheelchairPushes"
+}
+
+CATEGORY_1_CUMULATIVE_MAX = {
+    "steps"
 }
 
 CATEGORY_2_INSTANTANEOUS = {
@@ -21,7 +25,7 @@ CATEGORY_2_INSTANTANEOUS = {
 }
 
 CATEGORY_3_HOURLY = {
-    "heartRate", "oxygenSaturation", "speed", "power",
+    "heartRate", "oxygenSaturation", "power",
     "stepsCadence", "respiratoryRate"
 }
 
@@ -180,16 +184,50 @@ def aggregate_category_1_cumulative(records: List[Dict[str, Any]], record_type: 
         elif isinstance(app, str):
             origins.add(app)
     
-    # For cumulative metrics, sum all values (after cleaning zeros for steps)
+    # For cumulative metrics, sum all values (after cleaning zeros)
     # Don't remove zeros for hydration, calories, etc.
-    remove_zeros = record_type in ['steps', 'wheelchairPushes']
+    remove_zeros = record_type in ['wheelchairPushes']
     cleaned = clean_outliers(values, remove_zeros=remove_zeros)
-    
+
     total = sum(cleaned) if cleaned else 0
     
     return {
         "aggregate": {
             "total": total,
+            "recordCount": len(cleaned)
+        },
+        "dataOrigins": list(origins)
+    }
+
+
+def aggregate_category_1_cumulative_max(records: List[Dict[str, Any]], record_type: str) -> Dict[str, Any]:
+    """
+    Aggregate cumulative metrics where we want the maximum value (steps, etc.)
+    Returns the maximum value for the day (representing the final cumulative total).
+    """
+    values = []
+    origins = set()
+
+    for record in records:
+        val = extract_value_from_record(record, record_type)
+        if val is not None:
+            values.append(val)
+
+        app = record.get('app', {})
+        if isinstance(app, dict):
+            pkg = app.get('packageName', '')
+            if pkg:
+                origins.add(pkg)
+        elif isinstance(app, str):
+            origins.add(app)
+
+    # For cumulative max metrics, take the maximum value after cleaning
+    cleaned = clean_outliers(values, remove_zeros=True)
+    maximum = max(cleaned) if cleaned else 0
+
+    return {
+        "aggregate": {
+            "total": maximum,
             "recordCount": len(cleaned)
         },
         "dataOrigins": list(origins)
@@ -482,8 +520,10 @@ def aggregate_records(records: List[Dict[str, Any]], record_type: str) -> Dict[s
         return {}
     
     # Determine category and aggregate
-    if record_type in CATEGORY_1_CUMULATIVE:
+    if record_type in CATEGORY_1_CUMULATIVE_SUM:
         return aggregate_category_1_cumulative(records, record_type)
+    elif record_type in CATEGORY_1_CUMULATIVE_MAX:
+        return aggregate_category_1_cumulative_max(records, record_type)
     elif record_type in CATEGORY_2_INSTANTANEOUS:
         return aggregate_category_2_instantaneous(records, record_type)
     elif record_type in CATEGORY_3_HOURLY:

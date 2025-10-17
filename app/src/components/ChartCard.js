@@ -4,7 +4,10 @@ import { View, Text, StyleSheet } from 'react-native';
 import { getUnitLabel } from '../utils/normalizeRecord';
 
 // Metrics that show cumulative totals (sum of all values)
-const CUMULATIVE_METRICS = ['Steps', 'Distance', 'ActiveCaloriesBurned', 'TotalCaloriesBurned', 'ExerciseSession', 'SleepSession'];
+const CUMULATIVE_METRICS = ['Distance', 'ActiveCaloriesBurned', 'TotalCaloriesBurned', 'ExerciseSession', 'SleepSession'];
+
+// Metrics that are cumulative counters (take max value, not sum)
+const COUNTER_MAX_METRICS = ['Steps'];
 
 // Metrics that show the latest value only
 const INSTANTANEOUS_METRICS = [
@@ -25,6 +28,7 @@ export default function ChartCard({
   
   // Determine metric type
   const isCumulative = CUMULATIVE_METRICS.includes(metricKey);
+  const isCounterMax = COUNTER_MAX_METRICS.includes(metricKey);
   const isInstantaneous = INSTANTANEOUS_METRICS.includes(metricKey);
   const isBP = metricKey === 'BloodPressure';
   
@@ -78,7 +82,11 @@ export default function ChartCard({
     }
   } else {
     // Legacy format (individual records)
-    if (isCumulative) {
+    if (isCounterMax) {
+      // Take maximum value for cumulative counter metrics (e.g., Steps)
+      displayValue = Math.max(...data.map(d => d.y || 0));
+      displayLabel = isFromToday ? 'Total del día' : 'Último registro';
+    } else if (isCumulative) {
       // Sum all values for cumulative metrics
       displayValue = Math.round(data.reduce((sum, d) => sum + (d.y || 0), 0) * 10) / 10;
       displayLabel = isFromToday ? 'Total del día' : 'Último registro';

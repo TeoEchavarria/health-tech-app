@@ -1,0 +1,117 @@
+name: Deploy to EC2 🚀
+
+on:
+  push:
+    branches:
+      - "main" # This triggers the workflow on push to any branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current branch ✅
+        uses: actions/checkout@v2
+
+      - name: Set up SSH key and whitelist EC2 IP address 🐻‍❄️
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Build Docker image 🐳
+        run: |
+          cd api
+          docker build -t api-health:latest .
+          cd ..
+
+      - name: Save Docker image 💾
+        run: |
+          docker save api-health:latest | gzip > api-health.tar.gz
+
+      - name: Create .env file dynamically 🧨
+        env:
+          APP_HOST: ${{ secrets.APP_HOST }}
+          APP_PORT: ${{ secrets.APP_PORT }}
+          APP_DEBUG: ${{ secrets.APP_DEBUG }}
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          MONGO_DB: ${{ secrets.MONGO_DB }}
+          FCM_PROJECT_ID: ${{ secrets.FCM_PROJECT_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        run: |
+          echo "APP_HOST=${APP_HOST}" > .env
+          echo "APP_PORT=${APP_PORT}" >> .env
+          echo "APP_DEBUG=${APP_DEBUG}" >> .env
+          echo "MONGO_URI=${MONGO_URI}" >> .env
+          echo "MONGO_DB=${MONGO_DB}" >> .env
+          echo "FCM_PROJECT_ID=${FCM_PROJECT_ID}" >> .env
+          echo "OPENAI_API_KEY=${OPENAI_API_KEY}" >> .env
+          echo "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}" >> .env
+          echo "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}" >> .env
+          echo "AWS_S3_BUCKET=${AWS_S3_BUCKET}" >> .env
+
+      - name: Create service-account.json file 🔐
+        env:
+          SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+        run: |
+          echo "${SERVICE_ACCOUNT_JSON}" > service-account.json
+
+      - name: Copy files to EC2 🚙
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+        run: |
+          ssh $EC2_USERNAME@$EC2_HOST "mkdir -p /home/ec2-user/api-health"
+          scp api-health.tar.gz $EC2_USERNAME@$EC2_HOST:/home/ec2-user/api-health/
+          scp .env $EC2_USERNAME@$EC2_HOST:/home/ec2-user/api-health/
+          scp service-account.json $EC2_USERNAME@$EC2_HOST:/home/ec2-user/api-health/
+
+      - name: Deploy on EC2 🚀
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+        run: |
+          ssh -o StrictHostKeyChecking=no $EC2_USERNAME@$EC2_HOST << 'EOF'
+            cd /home/ec2-user/api-health
+            
+            echo "🛑 Stopping existing container..."
+            docker stop api-health 2>/dev/null || true
+            docker rm api-health 2>/dev/null || true
+            
+            echo "🗑️  Removing old images..."
+            docker rmi api-health:latest 2>/dev/null || true
+            
+            echo "📦 Loading new Docker image..."
+            gunzip -c api-health.tar.gz | docker load
+            
+            echo "🚀 Starting new container..."
+            docker run -d \
+              --name api-health \
+              --restart always \
+              -p 8080:8080 \
+              --env-file .env \
+              -v /home/ec2-user/api-health/service-account.json:/app/service-account.json:ro \
+              api-health:latest
+            
+            echo "✅ Container status:"
+            docker ps | grep api-health
+            
+            echo "📋 Recent logs:"
+            docker logs --tail=50 api-health
+            
+            echo "🧹 Cleaning up old Docker images..."
+            docker image prune -f
+            
+            echo "✅ Deployment completed!"
+          EOF
+
+      - name: Clean up files 🧹
+        if: always()
+        run: |
+          rm -f ~/.ssh/id_rsa
+          rm -f api-health.tar.gz
+          rm -f .env
+          rm -f service-account.json

@@ -68,3 +68,17 @@ test.py
 __pycache__/
 flask_session/
 service-account.json
+
+*.pem
+*.key
+*.tar.gz
+*.zip
+*.7z
+*.rar
+*.iso
+*.dmg
+*.pkg
+*.deb
+*.rpm
+*.msi
+*.exe
