@@ -17,7 +17,7 @@ def health_check():
     Health check endpoint to verify the API is running
     """
     return HealthResponse(
-        status="healthy",
+        status="new healthy status from github actions",
         timestamp=datetime.datetime.now().isoformat(),
         version="2.0.0",
         service="HC Gateway API"
