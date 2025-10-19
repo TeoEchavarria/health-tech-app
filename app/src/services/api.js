@@ -230,6 +230,9 @@ export async function getFamily(familyId) {
  * @param {string} userId - The user ID to add
  */
 export async function addFamilyMember(familyId, userId) {
+  console.log('addFamilyMember called with:', { familyId, userId });
+  console.log('URL will be:', `/family/${familyId}/member`);
+  
   const response = await apiClient.post(`/family/${familyId}/member`, {
     user_id: userId
   });

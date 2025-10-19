@@ -35,7 +35,16 @@ export default function FamilyScreen() {
   const loadFamilies = useCallback(async () => {
     try {
       const response = await getFamilies();
-      setFamilies(response.families || []);
+      console.log('Families response:', JSON.stringify(response, null, 2));
+      
+      // Map families to ensure we have the correct id field
+      const mappedFamilies = (response.families || []).map(family => ({
+        ...family,
+        id: family.id || family._id // Use id if available, otherwise use _id
+      }));
+      
+      console.log('Mapped families:', JSON.stringify(mappedFamilies, null, 2));
+      setFamilies(mappedFamilies);
     } catch (error) {
       console.error('Error loading families:', error);
       Toast.show({
@@ -99,6 +108,9 @@ export default function FamilyScreen() {
 
   // Add member to family
   const handleAddMember = async (familyId) => {
+    console.log('Adding member - familyId:', familyId);
+    console.log('newMemberInput:', newMemberInput);
+    
     const userId = newMemberInput[familyId];
     if (!userId || !userId.trim()) {
       Toast.show({
@@ -109,6 +121,8 @@ export default function FamilyScreen() {
       return;
     }
 
+    console.log('Calling addFamilyMember with:', { familyId, userId: userId.trim() });
+    
     try {
       await addFamilyMember(familyId, userId.trim());
       
@@ -122,6 +136,7 @@ export default function FamilyScreen() {
       loadFamilies();
     } catch (error) {
       console.error('Error adding member:', error);
+      console.error('Error details:', error.response?.data);
       Toast.show({
         type: 'error',
         text1: 'Error al agregar miembro',
