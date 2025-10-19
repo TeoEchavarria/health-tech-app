@@ -191,6 +191,71 @@ export async function checkHealth() {
 }
 
 // ============================================
+// FAMILY MANAGEMENT
+// ============================================
+
+/**
+ * Get all families the user belongs to
+ */
+export async function getFamilies() {
+  const response = await apiClient.get('/family');
+  return response.data;
+}
+
+/**
+ * Create a new family
+ * @param {string} name - Optional name for the family
+ * @param {string[]} members - Optional list of user IDs to add as members
+ */
+export async function createFamily(name, members = []) {
+  const response = await apiClient.post('/family', {
+    name,
+    members
+  });
+  return response.data;
+}
+
+/**
+ * Get details of a specific family
+ * @param {string} familyId - The family ID
+ */
+export async function getFamily(familyId) {
+  const response = await apiClient.get(`/family/${familyId}`);
+  return response.data;
+}
+
+/**
+ * Add a member to a family
+ * @param {string} familyId - The family ID
+ * @param {string} userId - The user ID to add
+ */
+export async function addFamilyMember(familyId, userId) {
+  const response = await apiClient.post(`/family/${familyId}/member`, {
+    user_id: userId
+  });
+  return response.data;
+}
+
+/**
+ * Remove a member from a family
+ * @param {string} familyId - The family ID
+ * @param {string} memberId - The member ID to remove
+ */
+export async function removeFamilyMember(familyId, memberId) {
+  const response = await apiClient.delete(`/family/${familyId}/member/${memberId}`);
+  return response.data;
+}
+
+/**
+ * Delete a family
+ * @param {string} familyId - The family ID
+ */
+export async function deleteFamily(familyId) {
+  const response = await apiClient.delete(`/family/${familyId}`);
+  return response.data;
+}
+
+// ============================================
 // RESPONSE INTERCEPTOR - Auto-refresh on 401/403
 // ============================================
 apiClient.interceptors.response.use(

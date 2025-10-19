@@ -30,6 +30,13 @@ import { syncAll } from './src/services/healthSync';
 import { setAuthToken, setAuthFromLogin, clearSession, setAuthErrorHandler } from './src/services/api';
 import { EventEmitter } from './src/utils/eventBus';
 import DashboardView from './src/screens/DashboardView';
+import FamilyScreen from './src/screens/FamilyScreen';
+
+// React Navigation imports
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+
+const Tab = createBottomTabNavigator();
 
 
 const setObj = async (key, value) => { try { const jsonValue = JSON.stringify(value); await AsyncStorage.setItem(key, jsonValue) } catch (e) { console.log(e) } }
@@ -418,19 +425,300 @@ const handleDel = async (message) => {
   });
 }
   
-
-export default Sentry.wrap(function App() {
+// Settings Screen Component
+function SettingsScreen() {
   const [, forceUpdate] = React.useReducer(x => x + 1, 0);
-  const [form, setForm] = React.useState(null);
   const [showSyncWarning, setShowSyncWarning] = React.useState(false);
   const [customStartDate, setcustomStartDate] = React.useState(new Date());
   const [customEndDate, setcustomEndDate] = React.useState(new Date());
   const [useCustomDates, setUseCustomDates] = React.useState(false);
   const [showDatePickerModal, setShowDatePickerModal] = React.useState(false);
-  const [currentView, setCurrentView] = React.useState('login'); // 'login', 'dashboard', 'main'
   const [isSyncing, setIsSyncing] = React.useState(false);
-  const [username, setUsername] = React.useState('');
   const defaultCalStyles = useDefaultStyles();
+
+  const formatDateToReadable = (date) => {
+    if (!date) return 'Not set';
+    const d = new Date(date);
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${month}/${day}/${year}`;
+  };
+
+  const formatDateToISOString = (date) => {
+    const d = new Date(date);
+    return d.toISOString();
+  };
+
+  return (
+    <ScrollView 
+      style={styles.scrollView}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.mainContent}>
+        {/* Header Section */}
+        <View style={styles.headerCard}>
+          <Text style={styles.headerTitle}>Hacking Health</Text>
+          <Text style={styles.headerSubtitle}>Health Connect Sync</Text>
+        </View>
+
+        {/* Status Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Sync Status</Text>
+          <View style={styles.statusRow}>
+            <View style={styles.statusIndicator} />
+            <Text style={styles.statusText}>Connected</Text>
+          </View>
+          <Text style={styles.lastSyncText}>
+            Last Sync: {lastSync ? new Date(lastSync).toLocaleString() : 'Never'}
+          </Text>
+        </View>
+
+        {/* Settings Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Settings</Text>
+          
+          <View style={styles.settingRow}>
+            <View style={styles.settingLabelContainer}>
+              <Text style={styles.settingLabel}>Sync Interval</Text>
+              <Text style={styles.settingDescription}>How often to sync data</Text>
+            </View>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.modernInput}
+                placeholder="Hours"
+                keyboardType='numeric'
+                defaultValue={(taskDelay / (1000 * 60 * 60)).toString()}
+                onChangeText={text => {
+                  const hours = Number(text);
+                  taskDelay = hours * 60 * 60 * 1000; 
+                  setPlain('taskDelay', String(taskDelay));
+                  ReactNativeForegroundService.update_task(() => sync(), {
+                    delay: taskDelay,
+                  })
+                  Toast.show({
+                    type: 'success',
+                    text1: `Sync interval updated to ${hours} ${hours === 1 ? 'hour' : 'hours'}`,
+                  })
+                }}
+              />
+              <Text style={styles.inputUnit}>hrs</Text>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingLabelContainer}>
+              <Text style={styles.settingLabel}>Full 30-day Sync</Text>
+              <Text style={styles.settingDescription}>Sync all data or incremental</Text>
+            </View>
+            <Switch
+              value={fullSyncMode}
+              trackColor={{ false: '#D1D5DB', true: '#93C5FD' }}
+              thumbColor={fullSyncMode ? '#3B82F6' : '#F3F4F6'}
+              onValueChange={async (value) => {
+                if (!value) {
+                  setShowSyncWarning(true);
+                } else {
+                  fullSyncMode = value;
+                  await setPlain('fullSyncMode', value.toString());
+                  Toast.show({
+                    type: 'info',
+                    text1: "Sync mode updated",
+                    text2: "Will sync full 30 days of data"
+                  });
+                  forceUpdate();
+                }
+              }}
+            />
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingLabelContainer}>
+              <Text style={styles.settingLabel}>Error Tracking</Text>
+              <Text style={styles.settingDescription}>Enable Sentry monitoring</Text>
+            </View>
+            <Switch
+              value={isSentryEnabled}
+              trackColor={{ false: '#D1D5DB', true: '#93C5FD' }}
+              thumbColor={isSentryEnabled ? '#3B82F6' : '#F3F4F6'}
+              onValueChange={async (value) => {
+                if (value) {
+                  Sentry.init({
+                    dsn: config.sentryDsn,
+                    tracesSampleRate: 1.0,
+                  });
+                  Toast.show({
+                    type: 'success',
+                    text1: "Sentry enabled",
+                  });
+                  isSentryEnabled = true;
+                  forceUpdate();
+                } else {
+                  Sentry.close();
+                  Toast.show({
+                    type: 'success',
+                    text1: "Sentry disabled",
+                  });
+                  isSentryEnabled = false;
+                  forceUpdate();
+                }
+                await setPlain('sentryEnabled', value.toString());
+              }}
+            />
+          </View>
+        </View>
+
+        {/* Warning Card */}
+        {showSyncWarning && (
+          <View style={styles.warningCard}>
+            <Text style={styles.warningTitle}>⚠️ Warning</Text>
+            <Text style={styles.warningText}>
+              Incremental sync only syncs data since the last sync. 
+              You may miss data if the app stops abruptly.
+            </Text>
+            <View style={styles.warningButtons}>
+              <TouchableOpacity
+                style={[styles.button, styles.buttonSecondary]}
+                onPress={() => setShowSyncWarning(false)}
+              >
+                <Text style={styles.buttonSecondaryText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, styles.buttonWarning]}
+                onPress={async () => {
+                  fullSyncMode = false;
+                  await setPlain('fullSyncMode', 'false');
+                  setShowSyncWarning(false);
+                  Toast.show({
+                    type: 'info',
+                    text1: "Sync mode updated",
+                    text2: "Will only sync data since last sync"
+                  });
+                  forceUpdate();
+                }}
+              >
+                <Text style={styles.buttonText}>Continue</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Sync Range Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Custom Sync Range</Text>
+          <View style={styles.dateRangeContainer}>
+            <View style={styles.dateDisplay}>
+              <Text style={styles.dateLabel}>From</Text>
+              <Text style={styles.dateValue}>
+                {formatDateToReadable(customStartDate)}
+              </Text>
+            </View>
+            <Text style={styles.dateSeparator}>→</Text>
+            <View style={styles.dateDisplay}>
+              <Text style={styles.dateLabel}>To</Text>
+              <Text style={styles.dateValue}>
+                {formatDateToReadable(customEndDate)}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={[styles.button, styles.buttonSecondary, { marginTop: 12 }]}
+            onPress={() => setShowDatePickerModal(true)}
+          >
+            <Text style={styles.buttonSecondaryText}>Select Dates</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Date Picker Modal */}
+        <Modal
+          visible={showDatePickerModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowDatePickerModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Select Date Range</Text>
+              
+              <DateTimePicker
+                mode="range"
+                maxDate={new Date()}
+                startDate={customStartDate}
+                endDate={customEndDate}
+                onChange={(...dates) => {
+                  setUseCustomDates(true);
+                  if (dates[0].startDate) setcustomStartDate(dates[0].startDate);
+                  if (dates[0].endDate) setcustomEndDate(dates[0].endDate);
+                }}
+                styles={defaultCalStyles}
+              />
+              
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.button, styles.buttonSecondary, { flex: 1, marginRight: 8 }]}
+                  onPress={() => setShowDatePickerModal(false)}
+                >
+                  <Text style={styles.buttonSecondaryText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.button, styles.buttonPrimary, { flex: 1, marginLeft: 8 }]}
+                  onPress={() => {
+                    setUseCustomDates(true);
+                    setShowDatePickerModal(false);
+                  }}
+                >
+                  <Text style={styles.buttonText}>Apply</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Action Buttons */}
+        <TouchableOpacity
+          style={[styles.button, styles.buttonPrimary]}
+          onPress={() => {
+            if (!useCustomDates) {
+              sync();
+            }
+            else if (customStartDate && customEndDate) {
+              sync(formatDateToISOString(customStartDate), formatDateToISOString(customEndDate));
+            }
+          }}
+        >
+          <Text style={styles.buttonText}>
+            {useCustomDates ? "Sync Selected Range" : "Sync Now"}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.button, styles.buttonDanger]}
+          onPress={() => {
+            delkey('login');
+            delkey('username');
+            login = null;
+            Toast.show({
+              type: 'success',
+              text1: "Logged out successfully",
+            })
+          }}
+        >
+          <Text style={styles.buttonText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+}
+
+export default Sentry.wrap(function App() {
+  const [, forceUpdate] = React.useReducer(x => x + 1, 0);
+  const [form, setForm] = React.useState(null);
+  const [username, setUsername] = React.useState('');
 
   const loginFunc = async () => {
     Toast.show({
@@ -469,7 +757,6 @@ export default Sentry.wrap(function App() {
         setUsername(form.username);
         await setPlain('username', form.username);
       }
-      setCurrentView('dashboard');
       forceUpdate();
       Toast.hide();
       Toast.show({
@@ -584,7 +871,6 @@ export default Sentry.wrap(function App() {
         visibilityTime: 5000
       });
       // Clear session and return to login
-      setCurrentView('login');
       login = null;
       forceUpdate();
     });
@@ -602,7 +888,6 @@ export default Sentry.wrap(function App() {
         // ✅ Token will be auto-injected by interceptor
         // Still set for backward compatibility
         setAuthToken(res);
-        setCurrentView('dashboard'); // Go to dashboard when already logged in
         
         // Load username if available
         get('username').then(savedUsername => {
@@ -642,398 +927,144 @@ export default Sentry.wrap(function App() {
     })
   }, [login])
 
-  const formatDateToISOString = (date) => {
-    if (!date) return null;
-    const midnightDate = new Date(date);
-    midnightDate.setHours(0, 0, 0, 0);
-    return midnightDate.toISOString();
-  };
-
-  const formatDateToReadable = (date) => {
-    if (!date) return 'Not selected';
-    return date.toLocaleDateString();
-  };
-
-  const handleSyncAndNavigate = async () => {
-    setIsSyncing(true);
-    try {
-      await sync();
-      Toast.show({
-        type: 'success',
-        text1: "Sync Complete",
-        text2: "Your health data has been synchronized.",
-      });
-    } catch (error) {
-      Toast.show({
-        type: 'error',
-        text1: "Sync Failed",
-        text2: error.message,
-      });
-    } finally {
-      setIsSyncing(false);
-      setCurrentView('main');
-    }
-  };
-
   return (
     <View style={styles.container}>
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-      {!login || currentView === 'login' ? (
-        <View style={styles.mainContent}>
-          {/* Login View */}
-          <View style={styles.loginHeader}>
-            <Text style={styles.loginTitle}>Welcome</Text>
-            <Text style={styles.loginSubtitle}>
-              Sign in to sync your health data
-            </Text>
-          </View>
-
-          {/* Login Card */}
-          <View style={styles.card}>
-            <Text style={styles.infoText}>
-              If you don't have an account, one will be created automatically
-            </Text>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Username</Text>
-              <TextInput
-                style={styles.modernInput}
-                placeholder="Enter your username"
-                placeholderTextColor="#9CA3AF"
-                onChangeText={text => setForm({ ...form, username: text })}
-              />
+      {!login ? (
+        // Login Screen
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.mainContent}>
+            {/* Login View */}
+            <View style={styles.loginHeader}>
+              <Text style={styles.loginTitle}>Welcome</Text>
+              <Text style={styles.loginSubtitle}>
+                Sign in to sync your health data
+              </Text>
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Password</Text>
-              <TextInput
-                style={styles.modernInput}
-                placeholder="Enter your password"
-                placeholderTextColor="#9CA3AF"
-                secureTextEntry={true}
-                onChangeText={text => setForm({ ...form, password: text })}
-              />
-            </View>
+            {/* Login Card */}
+            <View style={styles.card}>
+              <Text style={styles.infoText}>
+                If you don't have an account, one will be created automatically
+              </Text>
 
-            <View style={styles.settingRow}>
-              <View style={styles.settingLabelContainer}>
-                <Text style={styles.settingLabel}>Error Tracking</Text>
-                <Text style={styles.settingDescription}>Enable Sentry monitoring</Text>
-              </View>
-              <Switch
-                value={isSentryEnabled}
-                defaultValue={isSentryEnabled}
-                trackColor={{ false: '#D1D5DB', true: '#93C5FD' }}
-                thumbColor={isSentryEnabled ? '#3B82F6' : '#F3F4F6'}
-                onValueChange={async (value) => {
-                  if (value) {
-                    Sentry.init({
-                      dsn: config.sentryDsn,
-                    });
-                    Toast.show({
-                      type: 'success',
-                      text1: "Sentry enabled",
-                    });
-                    isSentryEnabled = true;
-                    forceUpdate();
-                  } else {
-                    Sentry.close();
-                    Toast.show({
-                      type: 'success',
-                      text1: "Sentry disabled",
-                    });
-                    isSentryEnabled = false;
-                    forceUpdate();
-                  }
-                  await setPlain('sentryEnabled', value.toString());
-                }} 
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.button, styles.buttonPrimary, { marginTop: 20 }]}
-              onPress={() => loginFunc()}
-            >
-              <Text style={styles.buttonText}>Login</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : currentView === 'dashboard' ? (
-        <DashboardView 
-          onNavigateToSettings={() => setCurrentView('main')}
-        />
-      ) : (
-        <View style={styles.mainContent}>
-          {/* Header Section */}
-          <View style={styles.headerCard}>
-            <Text style={styles.headerTitle}>Hacking Health</Text>
-            <Text style={styles.headerSubtitle}>Health Connect Sync</Text>
-          </View>
-
-          {/* Status Card */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Sync Status</Text>
-            <View style={styles.statusRow}>
-              <View style={styles.statusIndicator} />
-              <Text style={styles.statusText}>Connected</Text>
-            </View>
-            <Text style={styles.lastSyncText}>
-              Last Sync: {lastSync ? new Date(lastSync).toLocaleString() : 'Never'}
-            </Text>
-          </View>
-
-          {/* Settings Card */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Settings</Text>
-            
-            <View style={styles.settingRow}>
-              <View style={styles.settingLabelContainer}>
-                <Text style={styles.settingLabel}>Sync Interval</Text>
-                <Text style={styles.settingDescription}>How often to sync data</Text>
-              </View>
-              <View style={styles.inputContainer}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Username</Text>
                 <TextInput
                   style={styles.modernInput}
-                  placeholder="Hours"
-                  keyboardType='numeric'
-                  defaultValue={(taskDelay / (1000 * 60 * 60)).toString()}
-                  onChangeText={text => {
-                    const hours = Number(text);
-                    taskDelay = hours * 60 * 60 * 1000; 
-                    setPlain('taskDelay', String(taskDelay));
-                    ReactNativeForegroundService.update_task(() => sync(), {
-                      delay: taskDelay,
-                    })
-                    Toast.show({
-                      type: 'success',
-                      text1: `Sync interval updated to ${hours} ${hours === 1 ? 'hour' : 'hours'}`,
-                    })
-                  }}
+                  placeholder="Enter your username"
+                  placeholderTextColor="#9CA3AF"
+                  onChangeText={text => setForm({ ...form, username: text })}
                 />
-                <Text style={styles.inputUnit}>hrs</Text>
               </View>
-            </View>
 
-            <View style={styles.divider} />
-
-            <View style={styles.settingRow}>
-              <View style={styles.settingLabelContainer}>
-                <Text style={styles.settingLabel}>Full 30-day Sync</Text>
-                <Text style={styles.settingDescription}>Sync all data or incremental</Text>
-              </View>
-              <Switch
-                value={fullSyncMode}
-                trackColor={{ false: '#D1D5DB', true: '#93C5FD' }}
-                thumbColor={fullSyncMode ? '#3B82F6' : '#F3F4F6'}
-                onValueChange={async (value) => {
-                  if (!value) {
-                    setShowSyncWarning(true);
-                  } else {
-                    fullSyncMode = value;
-                    await setPlain('fullSyncMode', value.toString());
-                    Toast.show({
-                      type: 'info',
-                      text1: "Sync mode updated",
-                      text2: "Will sync full 30 days of data"
-                    });
-                    forceUpdate();
-                  }
-                }}
-              />
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.settingRow}>
-              <View style={styles.settingLabelContainer}>
-                <Text style={styles.settingLabel}>Error Tracking</Text>
-                <Text style={styles.settingDescription}>Enable Sentry monitoring</Text>
-              </View>
-              <Switch
-                value={isSentryEnabled}
-                trackColor={{ false: '#D1D5DB', true: '#93C5FD' }}
-                thumbColor={isSentryEnabled ? '#3B82F6' : '#F3F4F6'}
-                onValueChange={async (value) => {
-                  if (value) {
-                    Sentry.init({
-                      dsn: config.sentryDsn,
-                      tracesSampleRate: 1.0,
-                    });
-                    Toast.show({
-                      type: 'success',
-                      text1: "Sentry enabled",
-                    });
-                    isSentryEnabled = true;
-                    forceUpdate();
-                  } else {
-                    Sentry.close();
-                    Toast.show({
-                      type: 'success',
-                      text1: "Sentry disabled",
-                    });
-                    isSentryEnabled = false;
-                    forceUpdate();
-                  }
-                  await setPlain('sentryEnabled', value.toString());
-                }}
-              />
-            </View>
-          </View>
-
-          {/* Warning Card */}
-          {showSyncWarning && (
-            <View style={styles.warningCard}>
-              <Text style={styles.warningTitle}>⚠️ Warning</Text>
-              <Text style={styles.warningText}>
-                Incremental sync only syncs data since the last sync. 
-                You may miss data if the app stops abruptly.
-              </Text>
-              <View style={styles.warningButtons}>
-                <TouchableOpacity
-                  style={[styles.button, styles.buttonSecondary]}
-                  onPress={() => setShowSyncWarning(false)}
-                >
-                  <Text style={styles.buttonSecondaryText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.button, styles.buttonWarning]}
-                  onPress={async () => {
-                    fullSyncMode = false;
-                    await setPlain('fullSyncMode', 'false');
-                    setShowSyncWarning(false);
-                    Toast.show({
-                      type: 'info',
-                      text1: "Sync mode updated",
-                      text2: "Will only sync data since last sync"
-                    });
-                    forceUpdate();
-                  }}
-                >
-                  <Text style={styles.buttonText}>Continue</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {/* Sync Range Card */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Custom Sync Range</Text>
-            <View style={styles.dateRangeContainer}>
-              <View style={styles.dateDisplay}>
-                <Text style={styles.dateLabel}>From</Text>
-                <Text style={styles.dateValue}>
-                  {formatDateToReadable(customStartDate)}
-                </Text>
-              </View>
-              <Text style={styles.dateSeparator}>→</Text>
-              <View style={styles.dateDisplay}>
-                <Text style={styles.dateLabel}>To</Text>
-                <Text style={styles.dateValue}>
-                  {formatDateToReadable(customEndDate)}
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              style={[styles.button, styles.buttonSecondary, { marginTop: 12 }]}
-              onPress={() => setShowDatePickerModal(true)}
-            >
-              <Text style={styles.buttonSecondaryText}>Select Dates</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Date Picker Modal */}
-          <Modal
-            visible={showDatePickerModal}
-            transparent={true}
-            animationType="slide"
-            onRequestClose={() => setShowDatePickerModal(false)}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Select Date Range</Text>
-                
-                <DateTimePicker
-                  mode="range"
-                  maxDate={new Date()}
-                  startDate={customStartDate}
-                  endDate={customEndDate}
-                  onChange={(...dates) => {
-                    setUseCustomDates(true);
-                    if (dates[0].startDate) setcustomStartDate(dates[0].startDate);
-                    if (dates[0].endDate) setcustomEndDate(dates[0].endDate);
-                  }}
-                  styles={defaultCalStyles}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Password</Text>
+                <TextInput
+                  style={styles.modernInput}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry={true}
+                  onChangeText={text => setForm({ ...form, password: text })}
                 />
-                
-                <View style={styles.modalButtons}>
-                  <TouchableOpacity
-                    style={[styles.button, styles.buttonSecondary, { flex: 1, marginRight: 8 }]}
-                    onPress={() => setShowDatePickerModal(false)}
-                  >
-                    <Text style={styles.buttonSecondaryText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.button, styles.buttonPrimary, { flex: 1, marginLeft: 8 }]}
-                    onPress={() => {
-                      setUseCustomDates(true);
-                      setShowDatePickerModal(false);
-                    }}
-                  >
-                    <Text style={styles.buttonText}>Apply</Text>
-                  </TouchableOpacity>
+              </View>
+
+              <View style={styles.settingRow}>
+                <View style={styles.settingLabelContainer}>
+                  <Text style={styles.settingLabel}>Error Tracking</Text>
+                  <Text style={styles.settingDescription}>Enable Sentry monitoring</Text>
                 </View>
+                <Switch
+                  value={isSentryEnabled}
+                  defaultValue={isSentryEnabled}
+                  trackColor={{ false: '#D1D5DB', true: '#93C5FD' }}
+                  thumbColor={isSentryEnabled ? '#3B82F6' : '#F3F4F6'}
+                  onValueChange={async (value) => {
+                    if (value) {
+                      Sentry.init({
+                        dsn: config.sentryDsn,
+                      });
+                      Toast.show({
+                        type: 'success',
+                        text1: "Sentry enabled",
+                      });
+                      isSentryEnabled = true;
+                      forceUpdate();
+                    } else {
+                      Sentry.close();
+                      Toast.show({
+                        type: 'success',
+                        text1: "Sentry disabled",
+                      });
+                      isSentryEnabled = false;
+                      forceUpdate();
+                    }
+                    await setPlain('sentryEnabled', value.toString());
+                  }} 
+                />
               </View>
+
+              <TouchableOpacity
+                style={[styles.button, styles.buttonPrimary, { marginTop: 20 }]}
+                onPress={() => loginFunc()}
+              >
+                <Text style={styles.buttonText}>Login</Text>
+              </TouchableOpacity>
             </View>
-          </Modal>
-
-          {/* Action Buttons */}
-          <TouchableOpacity
-            style={[styles.button, styles.buttonPrimary]}
-            onPress={() => {
-              if (!useCustomDates) {
-                sync();
-              }
-              else if (customStartDate && customEndDate) {
-                sync(formatDateToISOString(customStartDate), formatDateToISOString(customEndDate));
-              }
+          </View>
+        </ScrollView>
+      ) : (
+        // Logged In - Show Tab Navigator
+        <NavigationContainer>
+          <Tab.Navigator
+            screenOptions={{
+              tabBarActiveTintColor: '#007AFF',
+              tabBarInactiveTintColor: '#8E8E93',
+              tabBarStyle: {
+                backgroundColor: 'white',
+                borderTopWidth: 1,
+                borderTopColor: '#E5E5EA',
+                height: 60,
+                paddingBottom: 8,
+                paddingTop: 8,
+              },
+              tabBarLabelStyle: {
+                fontSize: 12,
+                fontWeight: '600',
+              },
+              headerShown: false,
             }}
           >
-            <Text style={styles.buttonText}>
-              {useCustomDates ? "Sync Selected Range" : "Sync Now"}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, styles.buttonSecondary]}
-            onPress={() => setCurrentView('dashboard')}
-          >
-            <Text style={styles.buttonSecondaryText}>📊 View Dashboard</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, styles.buttonDanger]}
-            onPress={() => {
-              delkey('login');
-              delkey('username');
-              login = null;
-              setUsername('');
-              setCurrentView('login');
-              Toast.show({
-                type: 'success',
-                text1: "Logged out successfully",
-              })
-              forceUpdate();
-            }}
-          >
-            <Text style={styles.buttonText}>Logout</Text>
-          </TouchableOpacity>
-        </View>
+            <Tab.Screen 
+              name="Dashboard" 
+              component={DashboardView}
+              options={{
+                tabBarLabel: 'Dashboard',
+                tabBarIcon: ({ color }) => <Text style={{ fontSize: 24, color }}>📊</Text>,
+              }}
+            />
+            <Tab.Screen 
+              name="Familias" 
+              component={FamilyScreen}
+              options={{
+                tabBarLabel: 'Familias',
+                tabBarIcon: ({ color }) => <Text style={{ fontSize: 24, color }}>👨‍👩‍👧‍👦</Text>,
+              }}
+            />
+            <Tab.Screen 
+              name="Settings" 
+              component={SettingsScreen}
+              options={{
+                tabBarLabel: 'Settings',
+                tabBarIcon: ({ color }) => <Text style={{ fontSize: 24, color }}>⚙️</Text>,
+              }}
+            />
+          </Tab.Navigator>
+        </NavigationContainer>
       )}
-      </ScrollView>
 
       <StatusBar style="dark" />
       <Toast />
