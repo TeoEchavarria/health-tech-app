@@ -29,7 +29,12 @@ export async function analyzeFoodImage(imageUri, description = null) {
       }
     });
     
-    return response.data;
+    // Transform the response to match the expected field names
+    const { carbs, ...rest } = response.data;
+    return {
+      ...rest,
+      carbohydrates: carbs // Map 'carbs' to 'carbohydrates'
+    };
   } catch (error) {
     console.error('Error analyzing food image:', error);
     throw new Error(`Failed to analyze food image: ${error.response?.data?.detail || error.message}`);

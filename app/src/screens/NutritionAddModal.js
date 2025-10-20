@@ -14,6 +14,7 @@ import Toast from 'react-native-toast-message';
 import { useNavigation } from '@react-navigation/native';
 
 import MealForm from '../components/MealForm';
+import LoadingModal from '../components/LoadingModal';
 import { analyzeFoodImage, addMeal } from '../services/nutritionApi';
 import { EventEmitter } from '../utils/eventBus';
 
@@ -28,12 +29,14 @@ export default function NutritionAddModal({ visible, onClose }) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [analyzedData, setAnalyzedData] = useState(null);
+  const [showLoadingModal, setShowLoadingModal] = useState(false);
 
   const handleClose = () => {
     setMode(null);
     setAnalyzedData(null);
     setIsAnalyzing(false);
     setIsSaving(false);
+    setShowLoadingModal(false);
     onClose();
   };
 
@@ -64,6 +67,7 @@ export default function NutritionAddModal({ visible, onClose }) {
 
       if (!result.canceled && result.assets[0]) {
         setIsAnalyzing(true);
+        setShowLoadingModal(true);
         setMode('photo');
 
         try {
@@ -86,6 +90,7 @@ export default function NutritionAddModal({ visible, onClose }) {
           setMode(null);
         } finally {
           setIsAnalyzing(false);
+          setShowLoadingModal(false);
         }
       }
     } catch (error) {
@@ -157,11 +162,7 @@ export default function NutritionAddModal({ visible, onClose }) {
           onPress={handlePhotoAnalysis}
           disabled={isAnalyzing}
         >
-          {isAnalyzing ? (
-            <ActivityIndicator color="#3B82F6" size="large" />
-          ) : (
-            <Text style={styles.optionIcon}>📸</Text>
-          )}
+          <Text style={styles.optionIcon}>📸</Text>
           <Text style={styles.optionTitle}>Photo Analysis</Text>
           <Text style={styles.optionDescription}>
             Take a photo and let AI analyze it
@@ -191,16 +192,26 @@ export default function NutritionAddModal({ visible, onClose }) {
   );
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={handleClose}
-    >
-      <View style={styles.container}>
-        {!mode ? renderSelectionScreen() : renderFormScreen()}
-      </View>
-    </Modal>
+    <>
+      <Modal
+        visible={visible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={handleClose}
+      >
+        <View style={styles.container}>
+          {!mode ? renderSelectionScreen() : renderFormScreen()}
+        </View>
+      </Modal>
+
+      {/* Loading Modal for Photo Analysis */}
+      <LoadingModal
+        visible={showLoadingModal}
+        title="Analyzing Food Image"
+        subtitle="AI is processing your photo"
+        message="This may take a few moments while we analyze the nutritional content"
+      />
+    </>
   );
 }
 
