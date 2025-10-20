@@ -31,6 +31,7 @@ import { setAuthToken, setAuthFromLogin, clearSession, setAuthErrorHandler } fro
 import { EventEmitter } from './src/utils/eventBus';
 import DashboardView from './src/screens/DashboardView';
 import FamilyScreen from './src/screens/FamilyScreen';
+import NutritionDetailScreen from './src/screens/NutritionDetailScreen';
 
 // React Navigation imports
 import { NavigationContainer } from '@react-navigation/native';
@@ -1060,6 +1061,14 @@ export default Sentry.wrap(function App() {
               options={{
                 tabBarLabel: 'Settings',
                 tabBarIcon: ({ color }) => <Text style={{ fontSize: 24, color }}>⚙️</Text>,
+              }}
+            />
+            <Tab.Screen 
+              name="NutritionDetail" 
+              component={NutritionDetailScreen}
+              options={{
+                tabBarLabel: 'Nutrition',
+                tabBarIcon: ({ color }) => <Text style={{ fontSize: 24, color }}>🍽️</Text>,
               }}
             />
           </Tab.Navigator>

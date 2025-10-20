@@ -7,6 +7,8 @@ import { EventEmitter } from '../utils/eventBus';
 import { isoStartOfToday, isoNow, formatDateTime } from '../utils/dateHelpers';
 import SyncButton from '../components/SyncButton';
 import ChartCard from '../components/ChartCard';
+import FloatingActionButton from '../components/FloatingActionButton';
+import NutritionAddModal from './NutritionAddModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 
@@ -34,6 +36,7 @@ export default function DashboardView({ navigation, onNavigateToSettings }) {
   const [lastSync, setLastSync] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [authToken, setAuthToken] = useState(null);
+  const [showNutritionModal, setShowNutritionModal] = useState(false);
 
   // Load authentication token
   useEffect(() => {
@@ -155,14 +158,37 @@ export default function DashboardView({ navigation, onNavigateToSettings }) {
       AsyncStorage.setItem('lastSync', timestamp).catch(console.error);
     });
 
+    // Subscribe to nutrition updates
+    const nutritionSubscription = EventEmitter.addListener('NUTRITION_UPDATED', ({ date }) => {
+      // Optionally refresh data or show notification
+      Toast.show({
+        type: 'info',
+        text1: 'Nutrition Updated',
+        text2: `Data updated for ${date}`,
+      });
+    });
+
     return () => {
       subscription.remove();
+      nutritionSubscription.remove();
     };
   }, [loadToday]);
 
   const handleSyncSuccess = (timestamp) => {
     setLastSync(timestamp);
     loadToday();
+  };
+
+  const handleNutritionPress = () => {
+    setShowNutritionModal(true);
+  };
+
+  const handleReceiptPress = () => {
+    Toast.show({
+      type: 'info',
+      text1: 'Coming Soon',
+      text2: 'Receipt analysis feature will be available soon',
+    });
   };
 
   // Calculate summary statistics
@@ -243,6 +269,18 @@ export default function DashboardView({ navigation, onNavigateToSettings }) {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* Floating Action Button */}
+      <FloatingActionButton
+        onNutritionPress={handleNutritionPress}
+        onReceiptPress={handleReceiptPress}
+      />
+
+      {/* Nutrition Add Modal */}
+      <NutritionAddModal
+        visible={showNutritionModal}
+        onClose={() => setShowNutritionModal(false)}
+      />
     </View>
   );
 }
