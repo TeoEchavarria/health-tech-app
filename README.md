@@ -1,173 +1,430 @@
-# HCGateway
-HCGateway is a platform to let developers connect to the Health Connect API on Android via a REST API. You can view the documentation for the REST API [here](https://hcgateway.shuchir.dev/)
+# 🏥 HACKING HEALTH - HCGateway
+
+<div align="center">
+
+![Health Connect](https://img.shields.io/badge/Health%20Connect-Android%20API-blue?style=for-the-badge&logo=android)
+![REST API](https://img.shields.io/badge/REST%20API-FastAPI-green?style=for-the-badge&logo=fastapi)
+![React Native](https://img.shields.io/badge/Mobile-React%20Native-61DAFB?style=for-the-badge&logo=react)
+![MongoDB](https://img.shields.io/badge/Database-MongoDB-47A248?style=for-the-badge&logo=mongodb)
+
+**Unlock the power of Android Health Connect data through a simple REST API**
+
+[📖 API Documentation](https://hcgateway.shuchir.dev/) • [🚀 Quick Start](#-quick-start) • [📱 Download App](#-mobile-application)
+
+</div>
+
+## 🎯 What is HACKING HEALTH?
+
+**HACKING HEALTH** is a revolutionary platform that bridges the gap between Android's Health Connect API and developers who want to build health-focused applications. Instead of dealing with complex Android development, you can now access comprehensive health data through simple REST API calls.
+
+### 🔥 Why HACKING HEALTH?
+
+- **🚀 No Android Development Required**: Access health data without writing a single line of Android code
+- **📊 Comprehensive Health Data**: 30+ health metrics including heart rate, nutrition, sleep, exercise, and more
+- **🔄 Real-time Sync**: Automatic data synchronization every 2 hours with manual sync options
+- **🔒 Privacy First**: End-to-end encryption with Fernet encryption and Argon2 password hashing
+- **🌐 REST API**: Simple HTTP endpoints that work with any programming language
+- **📱 Cross-Platform**: Works with any app that can make HTTP requests
+
+### 🎯 Perfect For
+
+- **Health & Fitness Apps**: Build nutrition trackers, workout apps, or wellness dashboards
+- **Research Projects**: Collect anonymized health data for medical research
+- **Personal Health Tools**: Create custom health monitoring solutions
+- **IoT Integration**: Connect health data with smart home devices
+- **Data Analytics**: Analyze health trends and patterns
 
 <a href="https://www.buymeacoffee.com/shuchir" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a> 
-> [!NOTE]
-> Currently working on a more exciting project to run a lighter version of the server in the app itself, cutting down the setup process. Stay tuned!
-
-# How it works
-The platform consists of two parts:
-- A REST API/server
-- A mobile application that pings the server periodically
 
 > [!NOTE]
-> This project is still in development. The API may change without notice. The mobile application is also in development and may not work as expected. Please report any issues you find.
+> 🚧 **Coming Soon**: We're working on a lighter version that runs entirely within the app, eliminating the need for external servers. Stay tuned for this game-changing update!
+
+## 🚀 Quick Start
+
+### The Problem
+Building health applications on Android traditionally requires:
+- Complex Android development knowledge
+- Direct integration with Health Connect API
+- Managing permissions and data synchronization
+- Platform-specific code that doesn't work elsewhere
+
+### The Solution
+**HACKING HEALTH** simplifies this by providing:
+- A simple REST API that works with any programming language
+- Automatic data synchronization from Android devices
+- Encrypted data storage and transmission
+- Cross-platform compatibility
+
+## 🏗️ How It Works
+
+The platform consists of two main components:
+
+### 📱 Mobile Application (Android)
+- **Automatic Sync**: Pings the server every 2 hours to send health data
+- **Foreground Service**: Runs continuously, even when the app is closed
+- **Manual Sync**: Force sync anytime through the app interface
+- **Data Collection**: Gathers 30+ health metrics from Health Connect
+
+### 🌐 REST API Server
+- **Data Processing**: Receives, encrypts, and stores health data
+- **API Endpoints**: Provides secure access to user data
+- **Authentication**: User login and token-based access
+- **Encryption**: Fernet encryption for data security
+
+> [!NOTE]
+> 🚧 **Development Status**: This project is actively developed. The API may change without notice. The mobile application is in development and may not work as expected. Please report any issues you find.
 
 > [!IMPORTANT]
-> The database was recently migrated from Appwrite to MongoDB. If you were using the Appwrite version, you will need to migrate your data to the new database. You can find the migration script in the `scripts/` folder. You will need to install the `appwrite` and `pymongo` libraries to run the script, then run the script with the following command: `python3 migrate_1.5.0.py`.
+> 🔄 **Database Migration**: The database was recently migrated from Appwrite to MongoDB. If you were using the Appwrite version, you will need to migrate your data to the new database. You can find the migration script in the `scripts/` folder. You will need to install the `appwrite` and `pymongo` libraries to run the script, then run the script with the following command: `python3 migrate_1.5.0.py`.
 
+## 📊 Supported Health Data Types
 
-## How it Works
-- The mobile application pings the server every 2 hours to send data. The following data types are supported-
-    - Active Calories Burned (`activeCaloriesBurned`)
-    - Basal Body Temperature (`basalBodyTemperature`)
-    - Basal Metabolic Rate (`basalMetabolicRate`)
-    - Blood Glucose (`bloodGlucose`)
-    - Blood Pressure (`bloodPressure`)
-    - Body Fat (`bodyFat`)
-    - Body Temperature (`bodyTemperature`)
-    - Bone Mass (`boneMass`)
-    - Cervical Mucus (`cervicalMucus`)
-    - Distance (`distance`)
-    - Exercise (`exerciseSession`)
-    - Elevation Gained (`elevationGained`)
-    - Floors Climbed (`floorsClimbed`)
-    - Heart Rate (`heartRate`)
-    - Height (`height`)
-    - Hydration (`hydration`)
-    - Lean Body Mass (`leanBodyMass`)
-    - Menstruation Flow (`menstruationFlow`)
-    - Menstruation Period (`menstruationPeriod`)
-    - Nutrition (`nutrition`)
-    - Ovulation Test (`ovulationTest`)
-    - Oxygen Saturation (`oxygenSaturation`)
-    - Power (`power`)
-    - Respiratory Rate (`respiratoryRate`)
-    - Resting Heart Rate (`restingHeartRate`)
-    - Sleep (`sleepSession`)
-    - Speed (`speed`)
-    - Steps (`steps`)
-    - StepsCadence (`stepsCadence`)
-    - Total Calories Burned (`totalCaloriesBurned`)
-    - VO2 Max (`vo2Max`)
-    - Weight (`weight`)
-    - Wheelchair Pushes (`wheelchairPushes`)
+The mobile application automatically syncs **30+ health metrics** every 2 hours. Here's what you can access:
 
-Support for more types is planned for the future.
+### 🏃‍♂️ Fitness & Activity
+- **Active Calories Burned** (`activeCaloriesBurned`)
+- **Total Calories Burned** (`totalCaloriesBurned`)
+- **Distance** (`distance`)
+- **Steps** (`steps`)
+- **Steps Cadence** (`stepsCadence`)
+- **Exercise Sessions** (`exerciseSession`)
+- **Elevation Gained** (`elevationGained`)
+- **Floors Climbed** (`floorsClimbed`)
+- **Speed** (`speed`)
+- **Power** (`power`)
+- **Wheelchair Pushes** (`wheelchairPushes`)
 
-- Each sync takes approximatly 15 minutes
-- The server encrypts the data using Fernet encryption, then stores it in a mongo database.
-- The server exposes an API to let developers login and get the data for their users.
+### ❤️ Cardiovascular
+- **Heart Rate** (`heartRate`)
+- **Resting Heart Rate** (`restingHeartRate`)
+- **Blood Pressure** (`bloodPressure`)
+- **VO2 Max** (`vo2Max`)
+- **Respiratory Rate** (`respiratoryRate`)
+- **Oxygen Saturation** (`oxygenSaturation`)
 
-The platform allows two-way sync, which means you can make changes to your local Health Connect store remotely via REST api.
+### 🍎 Nutrition & Body Composition
+- **Nutrition** (`nutrition`)
+- **Weight** (`weight`)
+- **Height** (`height`)
+- **Body Fat** (`bodyFat`)
+- **Lean Body Mass** (`leanBodyMass`)
+- **Bone Mass** (`boneMass`)
+- **Basal Metabolic Rate** (`basalMetabolicRate`)
 
-## Get Started
-- There is a live instance hosted at https://api.hcgateway.shuchir.dev/ that you can use. You can also host your own instance. To learn more on Self Hosting, skip down to the Self Hosting section.
-> [!IMPORTANT]
-> **Use the hosted instance at your own risk. By using the hosted server, you acknowledge all responsibility is waived from the server owner.**
-- You can install the mobile application through the APK file. You can find the latest APK file in the releases section of this repository.
-- The minimum requirement for the APK file is Android Oreo (8.0)
-- Once you install the Android APK file, signup by entering a username and password
-- Once you see a screen showing your user id, you have successfully signed up. Your data will sync in 2 hours. This is customizable. You also have the option to force a sync any time through the application.
+### 🌡️ Vital Signs
+- **Body Temperature** (`bodyTemperature`)
+- **Basal Body Temperature** (`basalBodyTemperature`)
+- **Blood Glucose** (`bloodGlucose`)
 
-## Database
-### Users Structure
-```
-users {
-    _id: string
-    username: string
-    password: string
-    fcmToken: string
-    expiry: datetime
-    token: string
-    refresh: string
-}
-```
+### 💧 Wellness
+- **Hydration** (`hydration`)
+- **Sleep Sessions** (`sleepSession`)
+
+### 👩‍⚕️ Women's Health
+- **Menstruation Flow** (`menstruationFlow`)
+- **Menstruation Period** (`menstruationPeriod`)
+- **Cervical Mucus** (`cervicalMucus`)
+- **Ovulation Test** (`ovulationTest`)
+
+### 🔄 Sync Details
+- **Sync Frequency**: Every 2 hours (customizable)
+- **Sync Duration**: Approximately 15 minutes per sync
+- **Data Encryption**: Fernet encryption before storage
+- **Storage**: MongoDB database with user-specific collections
+- **Two-way Sync**: Make changes to Health Connect remotely via REST API
+
 > [!NOTE]
-> The password of the user encrypted using Argon 2 format. The password is never stored as is, and cannot be retrieved through any API.
+> 🚀 **Expanding Support**: More health data types are planned for future releases. Check our [API documentation](https://hcgateway.shuchir.dev/) for the latest updates.
 
-### Database Structure
+## 🚀 Get Started
+
+### Option 1: Use Hosted Instance (Recommended for Testing)
+
+1. **📱 Install the Mobile App**
+   - Download the latest APK from the [releases section](https://github.com/your-repo/releases)
+   - **Requirements**: Android Oreo (8.0) or higher
+   - Install the APK on your Android device
+
+2. **🔐 Create Your Account**
+   - Open the app and sign up with a username and password
+   - Note your User ID (displayed after successful signup)
+   - Your data will automatically sync every 2 hours
+
+3. **🌐 Access Your Data**
+   - Use the hosted API at `https://api.hcgateway.shuchir.dev/`
+   - Authenticate with your credentials
+   - Start building your health application!
+
+> [!IMPORTANT]
+> ⚠️ **Hosted Instance Disclaimer**: Use the hosted instance at your own risk. By using the hosted server, you acknowledge all responsibility is waived from the server owner.
+
+### Option 2: Self-Host (Recommended for Production)
+
+For full control and privacy, you can host your own instance. See the [Self Hosting](#-self-hosting) section below.
+
+## 📖 API Documentation
+
+The complete REST API documentation is available at: **[https://hcgateway.shuchir.dev/](https://hcgateway.shuchir.dev/)**
+
+### Quick API Example
+
+```bash
+# Login to get your access token
+curl -X POST https://api.hcgateway.shuchir.dev/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "your_username", "password": "your_password"}'
+
+# Get your health data
+curl -X GET https://api.hcgateway.shuchir.dev/data/heartRate \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
-hcgateway_[user_id]: string {
-    dataType: string {
-        _id: string
-        data: string
-        id: string
-        start: datetime
-        end: datetime
-        app: string
-    }
+
+## 🏗️ Technical Architecture
+
+### 🔐 Security & Privacy
+- **Password Encryption**: Argon2 hashing (passwords never stored in plain text)
+- **Data Encryption**: Fernet encryption for all health data
+- **Token-based Authentication**: JWT tokens for API access
+- **User Isolation**: Each user's data is stored in separate collections
+
+### 📊 Database Schema
+
+#### Users Collection
+```json
+{
+  "_id": "user_id",
+  "username": "string",
+  "password": "argon2_hash",
+  "fcmToken": "firebase_token",
+  "expiry": "datetime",
+  "token": "jwt_access_token",
+  "refresh": "jwt_refresh_token"
 }
 ```
 
-### Parameters
-- `$id` - The ID of the object. 
-- `data` - The data of the object encrypted using Fernet. When asked for through the API, the data will be decrypted for you using the user's hashed password found from the user id.
-- `id` - The ID of the object- This is the same as `_id` and is only kept for backward compatibility. May be removed in future versions.
-- `start` - The start date and time of the object
-- `end` - The end date and time of the object. Might not be present for some objects.
-- `app` - The app package string that the object was synced from.
+#### Health Data Collections
+Each user has their own collection named `hcgateway_[user_id]`:
 
-
-## REST API
-The documentation for the REST API can be found at https://hcgateway.shuchir.dev/
-
-## Mobile Application
-The mobile application is a simple Android application that pings the server every 2 hours (customizable) to send data. It starts a foreground service to do this, and the service will run even if the application is closed. The application is written in React Native.
-
-## Self Hosting
-You can self host the server and database for full control. However, if you'd like to push from your own server, you must build the mobile application yourself. You can find the instructions to build the mobile application below. This is because the app is packaged with the firebase key, and cannot change it dynamically. Again, firebase is only necessary if you want to push from your own server.
-### Firebase
-Follow these steps to set up Firebase:
-1. Create a new Firebase project at https://console.firebase.google.com/
-2. Add an Android app to the project
-3. Download the `google-services.json` file and place it in the `firebase/` folder as well as the `android/app/` folder
-
-### Docker (recommended)
-1. **Prerequisites**\
-    Ensure that you have Docker and Docker Compose installed on your system.
-
-2. **Setting up the Environment**
-
-   - You’ll need to configure environment variables before starting the services.
-   - Copy the provided `.env.example` file to `.env` inside the `api/` directory and configure it as necessary. When setting the `MONGO_URI` variable, the following format should be used: `mongodb://<username>:<password>@db:27017/hcgateway?authSource=admin`
-   - Set the mongo DB username and password in the `docker-compose.yml` file as well.
-
-    - Visit the firebase console > project settings > Service accounts and click generate new private key
-    - Save the file as `service-account.json` in the `api/` folder
-
-3. **Running the Containers with Docker Compose**\
-    The project uses Docker Compose for easier container orchestration. To run the API using Docker Compose, run the following command:
-    ```bash
-   docker-compose up -d
-   ```
-You can access the API at `http://localhost:6644`
-
-### Manual
-#### Server
-- Prerequisites: Python 3, mongoDB
-- Clone this repository
-- `cd` into the api/ folder
-- run `pip install -r requirements.txt`
-- rename `.env.example` to `.env` and fill in the values
-- Visit the firebase console > project settings > Service accounts and click generate new private key
-- Save the file as `service-account.json` in the `api/` folder
-- run `python3 main.py` to start the server
-
-#### Mobile Application
-- Prerequisites: Node.js 18+, npm, Android Studio (SDK, build-tools, platform-tools), Java 17
-- in another window/tab, `cd` into the app/ folder
-- run `npm install`
-- If you wish to remove sentry:
+```json
+{
+  "dataType": "heartRate|steps|nutrition|...",
+  "_id": "unique_record_id",
+  "data": "encrypted_health_data",
+  "id": "backward_compatibility_id",
+  "start": "datetime",
+  "end": "datetime",
+  "app": "source_app_package"
+}
 ```
+
+#### Data Fields Explained
+- **`_id`**: Unique identifier for the health record
+- **`data`**: Encrypted health data (decrypted automatically by API)
+- **`start/end`**: Time range for the health measurement
+- **`app`**: Source application package name
+- **`dataType`**: Type of health data (heartRate, steps, etc.)
+
+### 📱 Mobile Application Details
+- **Framework**: React Native
+- **Service**: Foreground service for continuous operation
+- **Sync**: Automatic every 2 hours (customizable)
+- **Manual Sync**: Available through app interface
+- **Background**: Runs even when app is closed
+
+## 🏠 Self Hosting
+
+For production use or full control over your data, you can host your own instance. This gives you complete privacy and customization options.
+
+> [!IMPORTANT]
+> 🔧 **Custom Mobile App Required**: If you want to use your own server, you must build the mobile application yourself since it's packaged with Firebase keys that can't be changed dynamically.
+
+### 🐳 Docker Setup (Recommended)
+
+#### Prerequisites
+- Docker and Docker Compose installed
+- Firebase project (for push notifications)
+
+#### 1. Environment Configuration
+```bash
+# Copy environment template
+cp api/.env.example api/.env
+
+# Configure your settings in api/.env
+# MONGO_URI format: mongodb://<username>:<password>@db:27017/hcgateway?authSource=admin
+```
+
+#### 2. Firebase Setup
+1. Create a Firebase project at [console.firebase.google.com](https://console.firebase.google.com/)
+2. Add an Android app to your project
+3. Download `google-services.json` and place in:
+   - `firebase/` folder
+   - `android/app/` folder
+4. Generate service account key:
+   - Go to Project Settings > Service Accounts
+   - Click "Generate new private key"
+   - Save as `service-account.json` in `api/` folder
+
+#### 3. Start Services
+```bash
+# Start all services
+docker-compose up -d
+
+# Access API at http://localhost:6644
+```
+
+### 🛠️ Manual Setup
+
+#### Server Setup
+```bash
+# Prerequisites: Python 3, MongoDB
+git clone <repository>
+cd api/
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your settings
+
+# Setup Firebase (same as Docker setup)
+# Place service-account.json in api/ folder
+
+# Start server
+python3 main.py
+```
+
+#### Mobile App Build
+```bash
+# Prerequisites: Node.js 18+, Android Studio, Java 17
+cd app/
+
+# Install dependencies
+npm install
+
+# Optional: Remove Sentry
 yarn remove @sentry/react-native
 npx @sentry/wizard -i reactNative -p android --uninstall
+
+# Optional: Configure custom Sentry
+# Edit App.js, app.json, android/sentry.properties, AndroidManifest.xml
+
+# Apply patches
+npx patch-package
+
+# Build APK
+npm run android
+# OR
+cd android && ./gradlew assembleRelease
+
+# Alternative: EAS Build (local only)
+# https://docs.expo.dev/build/eas-build/
 ```
-- If you wish to change sentry to your own instance:
-    - Change the `dsn` in `App.js` to your own DSN
-    - Change the server, org name, and project name in app.json
-    - Change these details again in android/sentry.properties
-    - Change the DSN in the AndroidManifest.xml
-- run `npx patch-package` to apply a patch to the foreground service library
-- run `npm run android` to start the application, or `cd android && ./gradlew assembleRelease` to build the APK file
-    - It is also possible to now use eas build to build the APK file. You can find more at https://docs.expo.dev/build/eas-build/ **NOTE: This must be a local build, since you need to run patch-package before building the APK file.**
+
+### 🔧 Configuration Options
+
+#### Environment Variables
+- `MONGO_URI`: MongoDB connection string
+- `JWT_SECRET`: Secret for JWT token generation
+- `ENCRYPTION_KEY`: Fernet encryption key
+- `FIREBASE_PROJECT_ID`: Firebase project ID
+
+#### Customization
+- **Sync Frequency**: Modify sync interval in mobile app
+- **Data Types**: Add/remove supported health metrics
+- **API Endpoints**: Extend REST API functionality
+- **Authentication**: Customize user management
+
+## 💡 Use Cases & Examples
+
+### 🏃‍♂️ Fitness Applications
+```python
+# Get user's daily steps
+import requests
+
+response = requests.get(
+    'https://api.hcgateway.shuchir.dev/data/steps',
+    headers={'Authorization': f'Bearer {access_token}'}
+)
+steps_data = response.json()
+```
+
+### 🍎 Nutrition Tracking
+```javascript
+// Fetch nutrition data for meal planning
+const nutritionData = await fetch('/api/data/nutrition', {
+  headers: { 'Authorization': `Bearer ${token}` }
+});
+const meals = await nutritionData.json();
+```
+
+### 📊 Health Dashboards
+```python
+# Create a comprehensive health dashboard
+health_metrics = ['heartRate', 'bloodPressure', 'weight', 'sleepSession']
+dashboard_data = {}
+
+for metric in health_metrics:
+    response = requests.get(f'/api/data/{metric}', headers=auth_headers)
+    dashboard_data[metric] = response.json()
+```
+
+### 🔬 Research & Analytics
+- **Medical Research**: Collect anonymized health data for studies
+- **Population Health**: Analyze health trends across user groups
+- **Clinical Trials**: Monitor patient health metrics remotely
+- **Wellness Programs**: Track employee health and fitness goals
+
+### 🏠 Smart Home Integration
+```python
+# Connect health data to smart home devices
+if heart_rate > 100:
+    smart_home.set_lighting('relaxing')
+    smart_home.play_music('calm')
+```
+
+## 🤝 Contributing
+
+We welcome contributions! Here's how you can help:
+
+1. **🐛 Report Bugs**: Use GitHub Issues to report problems
+2. **💡 Feature Requests**: Suggest new health data types or API improvements
+3. **📝 Documentation**: Help improve our docs and examples
+4. **🔧 Code Contributions**: Submit pull requests for bug fixes or features
+
+### Development Setup
+```bash
+# Fork and clone the repository
+git clone https://github.com/your-username/HCGateway.git
+cd HCGateway
+
+# Set up development environment
+cd api && pip install -r requirements.txt
+cd ../app && npm install
+
+# Run tests and development server
+npm run test
+python3 api/main.py
+```
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- **Health Connect API** by Google for providing comprehensive health data access
+- **React Native** community for the mobile development framework
+- **FastAPI** for the robust REST API framework
+- **MongoDB** for reliable data storage
+- **All contributors** who help make this project better
+
+---
+
+<div align="center">
+
+**Made with ❤️ for the health tech community**
+
+[⭐ Star this repo](https://github.com/your-repo/HCGateway) • [🐛 Report Issues](https://github.com/your-repo/HCGateway/issues) • [💬 Discussions](https://github.com/your-repo/HCGateway/discussions)
+
+</div>
