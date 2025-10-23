@@ -27,10 +27,32 @@ class AddMemberRequest(BaseModel):
 class UpdateFridgeRequest(BaseModel):
     fridge: Dict[str, Any] = Field(..., description="Fridge data to update")
 
+class UserInfo(BaseModel):
+    id: str = Field(..., alias="_id")
+    username: str
+    name: Optional[str] = None
+    email: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+    class Config:
+        populate_by_name = True
+
 class FamilyResponse(BaseModel):
     id: str = Field(..., alias="_id")
     name: Optional[str]
     members: List[str]
+    fridge: Dict[str, Any]
+    created_at: str
+    updated_at: str
+
+    class Config:
+        populate_by_name = True
+
+class FamilyDetailsResponse(BaseModel):
+    id: str = Field(..., alias="_id")
+    name: Optional[str]
+    members: List[UserInfo]
     fridge: Dict[str, Any]
     created_at: str
     updated_at: str
@@ -218,6 +240,53 @@ def get_family(family_id: str, user_id: str = Depends(verify_token)):
         _id=family["_id"],
         name=family.get("name"),
         members=family.get("members", []),
+        fridge=family.get("fridge", {}),
+        created_at=family.get("created_at", datetime.datetime.now()).isoformat(),
+        updated_at=family.get("updated_at", datetime.datetime.now()).isoformat()
+    )
+
+
+@router.get("/family/{family_id}/details", response_model=FamilyDetailsResponse)
+def get_family_details(family_id: str, user_id: str = Depends(verify_token)):
+    """
+    Get detailed information of a family including complete member information.
+    User must be a member of the family.
+    """
+    families = get_family_collection()
+    users = get_user_collection()
+    
+    # Find the family
+    family = families.find_one({"_id": family_id})
+    if not family:
+        raise HTTPException(status_code=404, detail="Family not found")
+    
+    # Check if user is a member
+    if user_id not in family.get("members", []):
+        raise HTTPException(
+            status_code=403, 
+            detail="You are not a member of this family"
+        )
+    
+    # Get member details
+    member_ids = family.get("members", [])
+    member_docs = list(users.find({"_id": {"$in": member_ids}}))
+    
+    # Create UserInfo objects for each member
+    member_details = []
+    for member in member_docs:
+        member_details.append(UserInfo(
+            _id=member["_id"],
+            username=member.get("username", ""),
+            name=member.get("name"),
+            email=member.get("email"),
+            created_at=member.get("created_at", datetime.datetime.now()).isoformat(),
+            updated_at=member.get("updated_at", datetime.datetime.now()).isoformat()
+        ))
+    
+    return FamilyDetailsResponse(
+        _id=family["_id"],
+        name=family.get("name"),
+        members=member_details,
         fridge=family.get("fridge", {}),
         created_at=family.get("created_at", datetime.datetime.now()).isoformat(),
         updated_at=family.get("updated_at", datetime.datetime.now()).isoformat()
