@@ -2,6 +2,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import config from '../../config';
+import { apiCall } from '../utils/apiWrapper';
 
 // Create axios instance with base configuration
 export const apiClient = axios.create({
@@ -142,52 +143,106 @@ export function setAuthErrorHandler(handler) {
  * Login to the server
  */
 export async function login(username, password, fcmToken) {
-  const response = await apiClient.post('/login', {
-    username,
-    password,
-    fcmToken
-  });
-  return response.data;
+  return apiCall(
+    async () => {
+      const response = await apiClient.post('/login', {
+        username,
+        password,
+        fcmToken
+      });
+      return response.data;
+    },
+    {
+      operation: 'login',
+      endpoint: '/login',
+      method: 'POST',
+      showToast: false, // Let the component handle the toast
+    }
+  );
 }
 
 /**
  * Refresh authentication token
  */
 export async function refreshToken(refreshToken) {
-  const response = await apiClient.post('/refresh', {
-    refresh: refreshToken
-  });
-  return response.data;
+  return apiCall(
+    async () => {
+      const response = await apiClient.post('/refresh', {
+        refresh: refreshToken
+      });
+      return response.data;
+    },
+    {
+      operation: 'refreshToken',
+      endpoint: '/refresh',
+      method: 'POST',
+      showToast: false,
+    }
+  );
 }
 
 /**
  * Sync health records to server
  */
 export async function syncRecords(recordType, data) {
-  const response = await apiClient.post(`/sync/${recordType}`, {
-    data
-  });
-  return response.data;
+  return apiCall(
+    async () => {
+      const response = await apiClient.post(`/sync/${recordType}`, {
+        data
+      });
+      return response.data;
+    },
+    {
+      operation: 'syncRecords',
+      endpoint: `/sync/${recordType}`,
+      method: 'POST',
+      recordType,
+      recordCount: Array.isArray(data) ? data.length : 1,
+      showToast: false,
+    }
+  );
 }
 
 /**
  * Delete records from server
  */
 export async function deleteRecords(recordType, uuids) {
-  const response = await apiClient.delete(`/sync/${recordType}`, {
-    data: {
-      uuid: uuids
+  return apiCall(
+    async () => {
+      const response = await apiClient.delete(`/sync/${recordType}`, {
+        data: {
+          uuid: uuids
+        }
+      });
+      return response.data;
+    },
+    {
+      operation: 'deleteRecords',
+      endpoint: `/sync/${recordType}`,
+      method: 'DELETE',
+      recordType,
+      recordCount: Array.isArray(uuids) ? uuids.length : 1,
+      showToast: false,
     }
-  });
-  return response.data;
+  );
 }
 
 /**
  * Check server health
  */
 export async function checkHealth() {
-  const response = await apiClient.get('/health');
-  return response.data;
+  return apiCall(
+    async () => {
+      const response = await apiClient.get('/health');
+      return response.data;
+    },
+    {
+      operation: 'checkHealth',
+      endpoint: '/health',
+      method: 'GET',
+      showToast: false,
+    }
+  );
 }
 
 // ============================================
@@ -198,8 +253,18 @@ export async function checkHealth() {
  * Get all families the user belongs to
  */
 export async function getFamilies() {
-  const response = await apiClient.get('/family');
-  return response.data;
+  return apiCall(
+    async () => {
+      const response = await apiClient.get('/family');
+      return response.data;
+    },
+    {
+      operation: 'getFamilies',
+      endpoint: '/family',
+      method: 'GET',
+      showToast: false, // Let the component handle the toast
+    }
+  );
 }
 
 /**
@@ -208,11 +273,23 @@ export async function getFamilies() {
  * @param {string[]} members - Optional list of user IDs to add as members
  */
 export async function createFamily(name, members = []) {
-  const response = await apiClient.post('/family', {
-    name,
-    members
-  });
-  return response.data;
+  return apiCall(
+    async () => {
+      const response = await apiClient.post('/family', {
+        name,
+        members
+      });
+      return response.data;
+    },
+    {
+      operation: 'createFamily',
+      endpoint: '/family',
+      method: 'POST',
+      familyName: name,
+      memberCount: members.length,
+      showToast: false,
+    }
+  );
 }
 
 /**
@@ -220,8 +297,19 @@ export async function createFamily(name, members = []) {
  * @param {string} familyId - The family ID
  */
 export async function getFamily(familyId) {
-  const response = await apiClient.get(`/family/${familyId}`);
-  return response.data;
+  return apiCall(
+    async () => {
+      const response = await apiClient.get(`/family/${familyId}`);
+      return response.data;
+    },
+    {
+      operation: 'getFamily',
+      endpoint: `/family/${familyId}`,
+      method: 'GET',
+      familyId,
+      showToast: false,
+    }
+  );
 }
 
 /**
@@ -233,10 +321,22 @@ export async function addFamilyMember(familyId, userId) {
   console.log('addFamilyMember called with:', { familyId, userId });
   console.log('URL will be:', `/family/${familyId}/member`);
   
-  const response = await apiClient.post(`/family/${familyId}/member`, {
-    user_id: userId
-  });
-  return response.data;
+  return apiCall(
+    async () => {
+      const response = await apiClient.post(`/family/${familyId}/member`, {
+        user_id: userId
+      });
+      return response.data;
+    },
+    {
+      operation: 'addFamilyMember',
+      endpoint: `/family/${familyId}/member`,
+      method: 'POST',
+      familyId,
+      userId,
+      showToast: false,
+    }
+  );
 }
 
 /**
@@ -245,8 +345,20 @@ export async function addFamilyMember(familyId, userId) {
  * @param {string} memberId - The member ID to remove
  */
 export async function removeFamilyMember(familyId, memberId) {
-  const response = await apiClient.delete(`/family/${familyId}/member/${memberId}`);
-  return response.data;
+  return apiCall(
+    async () => {
+      const response = await apiClient.delete(`/family/${familyId}/member/${memberId}`);
+      return response.data;
+    },
+    {
+      operation: 'removeFamilyMember',
+      endpoint: `/family/${familyId}/member/${memberId}`,
+      method: 'DELETE',
+      familyId,
+      memberId,
+      showToast: false,
+    }
+  );
 }
 
 /**
@@ -254,17 +366,45 @@ export async function removeFamilyMember(familyId, memberId) {
  * @param {string} familyId - The family ID
  */
 export async function deleteFamily(familyId) {
-  const response = await apiClient.delete(`/family/${familyId}`);
-  return response.data;
+  return apiCall(
+    async () => {
+      const response = await apiClient.delete(`/family/${familyId}`);
+      return response.data;
+    },
+    {
+      operation: 'deleteFamily',
+      endpoint: `/family/${familyId}`,
+      method: 'DELETE',
+      familyId,
+      showToast: false,
+    }
+  );
 }
 
 // ============================================
 // RESPONSE INTERCEPTOR - Auto-refresh on 401/403
 // ============================================
 apiClient.interceptors.response.use(
-  response => response,
+  response => {
+    // Log opcional en modo debug
+    if (config.debug?.apiLogging) {
+      console.log(`✅ ${response.config.method?.toUpperCase()} ${response.config.url} → ${response.status}`);
+    }
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config;
+    
+    // Enhanced error logging with structured format
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.error('🔴 API REQUEST FAILED');
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.error(`Method:   ${error.config?.method?.toUpperCase() || 'UNKNOWN'}`);
+    console.error(`URL:      ${error.config?.baseURL}${error.config?.url}`);
+    console.error(`Status:   ${error.response?.status || 'No response'}`);
+    console.error(`Message:  ${error.message}`);
+    console.error(`Code:     ${error.code || 'N/A'}`);
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
     // Check if this is an invalid token error
     const status = error.response?.status;
@@ -351,13 +491,29 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // Handle other errors
+    // Enhanced error diagnostics for network issues
+    if (!error.response && error.request) {
+      console.error('🔍 Network Diagnostics:');
+      console.error(`   • Base URL: ${error.config?.baseURL}`);
+      console.error(`   • Timeout: ${error.config?.timeout}ms`);
+      console.error(`   • Error Code: ${error.code || 'N/A'}`);
+      console.error(`   • Error Message: ${error.message}`);
+      console.error('   ⚠️  Possible causes:');
+      console.error('      - Backend server not running');
+      console.error('      - Network connectivity issues');
+      console.error('      - Firewall or VPN blocking connection');
+      console.error('      - SSL/Certificate problems');
+      console.error('      - DNS resolution issues');
+    }
+
+    // Handle other errors with sanitized data
     if (error.response) {
       // Don't log tokens or sensitive data
       const sanitizedData = { ...error.response.data };
       if (sanitizedData.token) sanitizedData.token = '[REDACTED]';
       if (sanitizedData.refresh) sanitizedData.refresh = '[REDACTED]';
-      console.error('API Error:', error.response.status, sanitizedData);
+      if (sanitizedData.password) sanitizedData.password = '[REDACTED]';
+      console.error('API Error Response:', error.response.status, sanitizedData);
     } else if (error.request) {
       console.error('Network Error:', error.message);
     } else {

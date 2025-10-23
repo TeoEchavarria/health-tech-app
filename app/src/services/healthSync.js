@@ -2,6 +2,7 @@
 // Handles reading from Health Connect and syncing to server
 
 import { apiClient } from './api';
+import { logApiError } from '../utils/errorHandler';
 import { 
   readRecords,
   readRecord,
@@ -13,10 +14,73 @@ import {
 } from '../native/healthConnect';
 import { EventEmitter } from '../utils/eventBus';
 import { isoStartOfToday, isoNow, isoDaysAgo } from '../utils/dateHelpers';
+import { ingestRecords } from './ingestService';
+import config from '../../config';
 
 // NOTE: All record types are now sent in bulk to the backend
 // The backend handles aggregation, outlier removal, and efficient storage with bulk operations
 // No special handling needed - one request per record type with all records
+
+// Configuration for endpoint routing (sync vs ingest)
+const ENDPOINT_CONFIG = {
+  HeartRate: { useIngest: config.ingest?.recordTypes?.HeartRate || false, enableRaw: true },
+  Steps: { useIngest: config.ingest?.recordTypes?.Steps || false, enableRaw: true },
+  Accelerometer: { useIngest: config.ingest?.recordTypes?.Accelerometer || false, enableRaw: true },
+  Distance: { useIngest: config.ingest?.recordTypes?.Distance || false, enableRaw: false },
+  SleepSession: { useIngest: config.ingest?.recordTypes?.SleepSession || false, enableRaw: false },
+  ExerciseSession: { useIngest: config.ingest?.recordTypes?.ExerciseSession || false, enableRaw: false },
+  // Add other record types as needed
+};
+
+/**
+ * Determine which endpoint to use for a record type
+ * @param {string} recordType - The record type
+ * @returns {Object} Endpoint configuration
+ */
+function getEndpointConfig(recordType) {
+  return ENDPOINT_CONFIG[recordType] || { useIngest: false, enableRaw: false };
+}
+
+/**
+ * Sync records using the appropriate endpoint (sync or ingest)
+ * @param {string} recordType - Type of record
+ * @param {Array} records - Records to sync
+ * @param {boolean} parallelMode - If true, send to both endpoints
+ * @returns {Promise<Object>} Sync result
+ */
+async function syncRecordsToEndpoint(recordType, records, parallelMode = false) {
+  const endpointConfig = getEndpointConfig(recordType);
+  const results = {};
+
+  // Send to ingest endpoint if configured
+  if (endpointConfig.useIngest || parallelMode) {
+    try {
+      console.log(`📤 Syncing ${recordType} to /ingest/: ${records.length} records`);
+      results.ingest = await ingestRecords(recordType, records);
+      console.log(`✅ Ingest sync completed: ${results.ingest.upserts} upserts, ${results.ingest.modified} modified`);
+    } catch (error) {
+      console.error(`❌ Ingest sync failed for ${recordType}:`, error);
+      logApiError(error, { recordType, operation: 'ingestSync', recordCount: records.length });
+      results.ingest = { error: error.message };
+    }
+  }
+
+  // Send to sync endpoint if not using ingest or in parallel mode
+  if (!endpointConfig.useIngest || parallelMode) {
+    try {
+      console.log(`📤 Syncing ${recordType} to /sync/: ${records.length} records`);
+      const response = await apiClient.post(`/sync/${recordType}`, { data: records });
+      results.sync = response.data;
+      console.log(`✅ Sync endpoint completed for ${recordType}`);
+    } catch (error) {
+      console.error(`❌ Sync endpoint failed for ${recordType}:`, error);
+      logApiError(error, { recordType, operation: 'syncEndpoint', recordCount: records.length });
+      results.sync = { error: error.message };
+    }
+  }
+
+  return results;
+}
 
 /**
  * Ensure read permissions are granted before fetching data
@@ -274,7 +338,9 @@ export async function syncAll({
     }
     
     // Second pass: sync to server
-    // All types are now sent in bulk - backend handles aggregation efficiently
+    // Route to appropriate endpoint (sync or ingest) based on configuration
+    const parallelMode = config.migration?.parallelMode || false;
+    
     for (const type of RECORD_TYPES) {
       const records = recordCounts[type];
       
@@ -282,15 +348,23 @@ export async function syncAll({
         continue;
       }
       
-      // Send ALL records for this type in ONE request
+      // Send ALL records for this type using appropriate endpoint(s)
       try {
-        console.log(`📤 Syncing ${type}: ${records.length} records in ONE bulk request`);
+        console.log(`📤 Syncing ${type}: ${records.length} records`);
         
-        await apiClient.post(`/sync/${type}`, {
-          data: records  // Send all records at once
-        });
+        const results = await syncRecordsToEndpoint(type, records, parallelMode);
         
-        syncedRecords += records.length;
+        // Count successful records (prefer ingest results if available)
+        if (results.ingest && !results.ingest.error) {
+          syncedRecords += records.length;
+        } else if (results.sync && !results.sync.error) {
+          syncedRecords += records.length;
+        }
+        
+        // Log results for migration testing
+        if (config.migration?.testMode) {
+          console.log(`📊 ${type} sync results:`, results);
+        }
         
         // Emit progress update
         if (onProgress) {
@@ -298,13 +372,15 @@ export async function syncAll({
             current: syncedRecords,
             total: totalRecords,
             phase: 'syncing',
-            currentType: type
+            currentType: type,
+            results: results // Include results for debugging
           });
         }
         
         console.log(`✅ Successfully synced ${records.length} ${type} records`);
       } catch (error) {
-        console.error(`❌ Error bulk syncing ${type}:`, error);
+        console.error(`❌ Error syncing ${type}:`, error);
+        logApiError(error, { recordType: type, operation: 'syncAll', recordCount: records.length });
         // Continue with next type even if this one fails
       }
     }
@@ -344,6 +420,7 @@ export async function syncSpecificTypes(types, options = {}) {
     await initialize();
     
     const { startTime, endTime, authToken, onProgress } = options;
+    const parallelMode = config.migration?.parallelMode || false;
     
     const currentTime = isoNow();
     const from = startTime || isoDaysAgo(29);
@@ -367,11 +444,17 @@ export async function syncSpecificTypes(types, options = {}) {
         
         if (records.length === 0) continue;
         
-        // Send ALL records in ONE bulk request
-        console.log(`📤 Syncing ${type}: ${records.length} records in ONE bulk request`);
+        // Send ALL records using appropriate endpoint(s)
+        console.log(`📤 Syncing ${type}: ${records.length} records`);
         
-        await apiClient.post(`/sync/${type}`, { data: records });
-        syncedRecords += records.length;
+        const results = await syncRecordsToEndpoint(type, records, parallelMode);
+        
+        // Count successful records
+        if (results.ingest && !results.ingest.error) {
+          syncedRecords += records.length;
+        } else if (results.sync && !results.sync.error) {
+          syncedRecords += records.length;
+        }
         
         if (onProgress) {
           onProgress({ current: syncedRecords, total: totalRecords });
@@ -380,6 +463,7 @@ export async function syncSpecificTypes(types, options = {}) {
         console.log(`✅ Successfully synced ${records.length} ${type} records`);
       } catch (error) {
         console.error(`❌ Error processing ${type}:`, error);
+        logApiError(error, { recordType: type, operation: 'syncSpecificTypes', recordCount: records.length });
       }
     }
     
@@ -397,10 +481,19 @@ export async function syncSpecificTypes(types, options = {}) {
  * Get sync statistics
  */
 export function getSyncStats() {
+  const ingestEnabled = config.ingest?.enabled || false;
+  const ingestTypes = Object.entries(config.ingest?.recordTypes || {})
+    .filter(([_, enabled]) => enabled)
+    .map(([type, _]) => type);
+  
   return {
     totalTypes: RECORD_TYPES.length,
     allTypes: RECORD_TYPES,
-    syncMode: 'bulk'  // All types use bulk sync now
+    syncMode: 'bulk',  // All types use bulk sync now
+    ingestEnabled,
+    ingestTypes,
+    endpointConfig: ENDPOINT_CONFIG,
+    migrationMode: config.migration?.parallelMode || false
   };
 }
 

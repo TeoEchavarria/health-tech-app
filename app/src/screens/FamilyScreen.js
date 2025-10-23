@@ -46,11 +46,27 @@ export default function FamilyScreen() {
       console.log('Mapped families:', JSON.stringify(mappedFamilies, null, 2));
       setFamilies(mappedFamilies);
     } catch (error) {
-      console.error('Error loading families:', error);
+      // Error ya está clasificado y logueado por apiWrapper
+      console.error('❌ Failed to load families:', error.toLogString?.() || error.message);
+      
+      // Mostrar mensaje específico según el tipo de error
+      let errorTitle = 'Error al cargar familias';
+      let errorMessage = error.userMessage?.description || error.message;
+      
+      if (error.type === 'NETWORK') {
+        errorTitle = 'Sin conexión al servidor';
+        errorMessage = 'No se puede conectar con el servidor. Verifica tu conexión a internet.';
+      } else if (error.type === 'AUTH') {
+        errorTitle = 'Sesión expirada';
+        errorMessage = 'Por favor, inicia sesión nuevamente.';
+      }
+      
       Toast.show({
         type: 'error',
-        text1: 'Error al cargar familias',
-        text2: error.response?.data?.detail || error.message
+        text1: errorTitle,
+        text2: errorMessage,
+        position: 'top',
+        visibilityTime: 5000,
       });
     } finally {
       setLoading(false);

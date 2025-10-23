@@ -27,8 +27,10 @@ import config from './config';
 
 // Import new modular services and components
 import { syncAll } from './src/services/healthSync';
-import { setAuthToken, setAuthFromLogin, clearSession, setAuthErrorHandler } from './src/services/api';
+import { setAuthToken, setAuthFromLogin, clearSession, setAuthErrorHandler, checkHealth } from './src/services/api';
+import { getIngestQueue } from './src/utils/ingestQueue';
 import { EventEmitter } from './src/utils/eventBus';
+import { diagnoseApiConnection } from './src/utils/apiDiagnostics';
 import DashboardView from './src/screens/DashboardView';
 import FamilyScreen from './src/screens/FamilyScreen';
 import NutritionDetailScreen from './src/screens/NutritionDetailScreen';
@@ -219,6 +221,74 @@ const refreshTokenFunc = async () => {
     // Don't clear session here - let the interceptor handle it
   }
 }
+
+/**
+ * Enhanced background sync task that includes both Health Connect sync and ingest queue flushing
+ */
+const backgroundSyncTask = async () => {
+  try {
+    console.log('🔄 Starting background sync task...');
+    
+    // Test connectivity first
+    try {
+      await checkHealth();
+      console.log('✅ Backend is reachable');
+    } catch (healthError) {
+      console.error('❌ Backend health check failed:', healthError.toLogString?.() || healthError.message);
+      
+      if (healthError.type === 'NETWORK') {
+        console.error('⚠️  Cannot reach backend server. Sync cancelled.');
+        Toast.show({
+          type: 'error',
+          text1: 'Servidor no disponible',
+          text2: 'No se puede conectar al servidor. La sincronización se intentará más tarde.',
+          position: 'top',
+        });
+        return; // Don't continue with sync
+      }
+    }
+    
+    // 1. Sync Health Connect records (existing logic)
+    await sync();
+    
+    // 2. Flush ingest queue if enabled
+    if (config.ingest?.enabled) {
+      try {
+        const queue = getIngestQueue();
+        const pendingCount = await queue.getPendingCount();
+        
+        if (pendingCount > 0) {
+          console.log(`📤 Flushing ${pendingCount} pending ingest items...`);
+          
+          // Update foreground service notification
+          ReactNativeForegroundService.update({
+            id: 1244,
+            title: 'Hacking Health Sync Progress',
+            message: `Flushing ${pendingCount} pending data chunks...`,
+            icon: 'ic_launcher',
+            setOnlyAlertOnce: true,
+            color: '#000000',
+          });
+          
+          const result = await queue.flush();
+          console.log(`✅ Ingest queue flush complete: ${result.success} success, ${result.failed} failed, ${result.retried} retried`);
+        }
+      } catch (error) {
+        console.error('❌ Failed to flush ingest queue:', error.toLogString?.() || error.message);
+      }
+    }
+    
+    console.log('✅ Background sync task completed');
+  } catch (error) {
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.error('❌ BACKGROUND SYNC TASK FAILED');
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.error('Error type:', error.type || 'UNKNOWN');
+    console.error('Message:', error.message);
+    console.error('Stack:', error.stack);
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  }
+};
 
 const sync = async (customStartTime, customEndTime) => {
   await initialize();
@@ -721,6 +791,28 @@ export default Sentry.wrap(function App() {
   const [form, setForm] = React.useState(null);
   const [username, setUsername] = React.useState('');
 
+  // Log configuration and run diagnostics on app startup
+  React.useEffect(() => {
+    // Log configuration on app start
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📱 APP CONFIGURATION');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`API Base URL:     ${config.apiBaseUrl}`);
+    console.log(`Ingest Enabled:   ${config.ingest?.enabled || false}`);
+    console.log(`Debug Mode:       ${config.debug?.enabled || false}`);
+    console.log(`Sync Interval:    ${config.defaultSyncIntervalHours}h`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
+    // Run diagnostics if enabled
+    if (config.debug?.diagnostics) {
+      diagnoseApiConnection().then(results => {
+        console.log('API Diagnostics:', JSON.stringify(results, null, 2));
+      }).catch(error => {
+        console.error('Diagnostics failed:', error);
+      });
+    }
+  }, []);
+
   const loginFunc = async () => {
     Toast.show({
       type: 'info',
@@ -900,7 +992,7 @@ export default Sentry.wrap(function App() {
           if (res) taskDelay = Number(res);
         })
         
-        ReactNativeForegroundService.add_task(() => sync(), {
+        ReactNativeForegroundService.add_task(() => backgroundSyncTask(), {
           delay: taskDelay,
           onLoop: true,
           taskId: 'hacking-health_sync',
