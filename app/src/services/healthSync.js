@@ -147,8 +147,17 @@ export async function fetchLatestRecordForType(recordType, { id } = {}) {
     if (records.length > 0) {
       // Sort by time to ensure we get the latest (most recent first)
       const sorted = records.sort((a, b) => {
-        const timeA = new Date(a.startTime || a.time).getTime();
-        const timeB = new Date(b.startTime || b.time).getTime();
+        // For session-based records (Sleep, Exercise), use endTime to get the most recent completion
+        const timeA = new Date(
+          (recordType === 'SleepSession' || recordType === 'ExerciseSession') 
+            ? (a.endTime || a.startTime || a.time)
+            : (a.startTime || a.time)
+        ).getTime();
+        const timeB = new Date(
+          (recordType === 'SleepSession' || recordType === 'ExerciseSession') 
+            ? (b.endTime || b.startTime || b.time)
+            : (b.startTime || b.time)
+        ).getTime();
         return timeB - timeA; // Descending order (newest first)
       });
       

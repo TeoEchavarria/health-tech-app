@@ -1025,16 +1025,26 @@ export default Sentry.wrap(function App() {
               tabBarActiveTintColor: '#007AFF',
               tabBarInactiveTintColor: '#8E8E93',
               tabBarStyle: {
-                backgroundColor: 'white',
-                borderTopWidth: 1,
-                borderTopColor: '#E5E5EA',
-                height: 60,
-                paddingBottom: 8,
-                paddingTop: 8,
+                backgroundColor: 'rgba(255, 255, 255, 0.94)',
+                borderTopWidth: 0,
+                height: 70,
+                paddingBottom: 12,
+                paddingTop: 12,
+                paddingHorizontal: 16,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -2 },
+                shadowOpacity: 0.1,
+                shadowRadius: 8,
+                elevation: 8,
               },
               tabBarLabelStyle: {
-                fontSize: 12,
-                fontWeight: '600',
+                fontSize: 11,
+                fontWeight: '500',
+                marginTop: 4,
+                letterSpacing: 0.2,
+              },
+              tabBarIconStyle: {
+                marginTop: 2,
               },
               headerShown: false,
             }}
@@ -1044,7 +1054,16 @@ export default Sentry.wrap(function App() {
               component={DashboardView}
               options={{
                 tabBarLabel: 'Dashboard',
-                tabBarIcon: ({ color }) => <Text style={{ fontSize: 24, color }}>📊</Text>,
+                tabBarIcon: ({ color, focused }) => (
+                  <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ 
+                      fontSize: 20, 
+                      color, 
+                      fontWeight: focused ? '600' : '400',
+                      opacity: focused ? 1 : 0.7
+                    }}>📊</Text>
+                  </View>
+                ),
               }}
             />
             <Tab.Screen 
@@ -1052,7 +1071,16 @@ export default Sentry.wrap(function App() {
               component={FamilyScreen}
               options={{
                 tabBarLabel: 'Familias',
-                tabBarIcon: ({ color }) => <Text style={{ fontSize: 24, color }}>👨‍👩‍👧‍👦</Text>,
+                tabBarIcon: ({ color, focused }) => (
+                  <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ 
+                      fontSize: 20, 
+                      color, 
+                      fontWeight: focused ? '600' : '400',
+                      opacity: focused ? 1 : 0.7
+                    }}>👨‍👩‍👧‍👦</Text>
+                  </View>
+                ),
               }}
             />
             <Tab.Screen 
@@ -1060,7 +1088,16 @@ export default Sentry.wrap(function App() {
               component={SettingsScreen}
               options={{
                 tabBarLabel: 'Settings',
-                tabBarIcon: ({ color }) => <Text style={{ fontSize: 24, color }}>⚙️</Text>,
+                tabBarIcon: ({ color, focused }) => (
+                  <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ 
+                      fontSize: 20, 
+                      color, 
+                      fontWeight: focused ? '600' : '400',
+                      opacity: focused ? 1 : 0.7
+                    }}>⚙️</Text>
+                  </View>
+                ),
               }}
             />
             <Tab.Screen 
@@ -1068,7 +1105,16 @@ export default Sentry.wrap(function App() {
               component={NutritionDetailScreen}
               options={{
                 tabBarLabel: 'Nutrition',
-                tabBarIcon: ({ color }) => <Text style={{ fontSize: 24, color }}>🍽️</Text>,
+                tabBarIcon: ({ color, focused }) => (
+                  <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ 
+                      fontSize: 20, 
+                      color, 
+                      fontWeight: focused ? '600' : '400',
+                      opacity: focused ? 1 : 0.7
+                    }}>🍽️</Text>
+                  </View>
+                ),
               }}
             />
           </Tab.Navigator>

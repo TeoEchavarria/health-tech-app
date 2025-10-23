@@ -37,6 +37,7 @@ export default function DashboardView({ navigation, onNavigateToSettings }) {
   const [refreshing, setRefreshing] = useState(false);
   const [authToken, setAuthToken] = useState(null);
   const [showNutritionModal, setShowNutritionModal] = useState(false);
+  const [showEmptyMetrics, setShowEmptyMetrics] = useState(false);
 
   // Load authentication token
   useEffect(() => {
@@ -103,7 +104,11 @@ export default function DashboardView({ navigation, onNavigateToSettings }) {
           next[metric.key] = {
             data: chartData,
             isFromToday: isFromToday,
-            recordDate: records.length > 0 ? (records[records.length - 1].startTime || records[records.length - 1].time) : null
+            recordDate: records.length > 0 
+              ? (metric.key === 'SleepSession' || metric.key === 'ExerciseSession'
+                  ? (records[records.length - 1].endTime || records[records.length - 1].startTime)
+                  : (records[records.length - 1].startTime || records[records.length - 1].time))
+              : null
           };
         } catch (error) {
           console.warn(`Error fetching ${metric.key}:`, error);
@@ -194,6 +199,17 @@ export default function DashboardView({ navigation, onNavigateToSettings }) {
   // Calculate summary statistics
   const totalDataPoints = Object.values(dataMap).reduce((sum, metricData) => sum + (metricData.data?.length || 0), 0);
   const metricsWithData = Object.values(dataMap).filter(metricData => metricData.data?.length > 0).length;
+  
+  // Split metrics into those with and without data
+  const metricsWithDataList = METRICS.filter(metric => {
+    const metricData = dataMap[metric.key] || { data: [] };
+    return metricData.data && metricData.data.length > 0;
+  });
+  
+  const metricsWithoutDataList = METRICS.filter(metric => {
+    const metricData = dataMap[metric.key] || { data: [] };
+    return !metricData.data || metricData.data.length === 0;
+  });
 
   return (
     <View style={styles.container}>
@@ -243,7 +259,8 @@ export default function DashboardView({ navigation, onNavigateToSettings }) {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.metricsList}>
-          {METRICS.map((metric) => {
+          {/* Show metrics with data */}
+          {metricsWithDataList.map((metric) => {
             const metricData = dataMap[metric.key] || { data: [], isFromToday: true, recordDate: null };
             return (
               <ChartCard
@@ -257,6 +274,39 @@ export default function DashboardView({ navigation, onNavigateToSettings }) {
               />
             );
           })}
+          
+          {/* Collapsible section for metrics without data */}
+          {metricsWithoutDataList.length > 0 && (
+            <View style={styles.emptyMetricsSection}>
+              <TouchableOpacity
+                style={styles.emptyMetricsToggle}
+                onPress={() => setShowEmptyMetrics(!showEmptyMetrics)}
+              >
+                <Text style={styles.emptyMetricsToggleText}>
+                  {showEmptyMetrics ? '▼' : '▶'} Available Metrics ({metricsWithoutDataList.length})
+                </Text>
+              </TouchableOpacity>
+              
+              {showEmptyMetrics && (
+                <View style={styles.emptyMetricsList}>
+                  {metricsWithoutDataList.map((metric) => {
+                    const metricData = dataMap[metric.key] || { data: [], isFromToday: true, recordDate: null };
+                    return (
+                      <ChartCard
+                        key={metric.key}
+                        title={metric.title}
+                        width="100%"
+                        data={metricData.data || []}
+                        metricKey={metric.key}
+                        isFromToday={metricData.isFromToday}
+                        recordDate={metricData.recordDate}
+                      />
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          )}
         </View>
 
         {/* Settings Button */}
@@ -375,6 +425,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#374151',
+  },
+  emptyMetricsSection: {
+    marginTop: 16,
+  },
+  emptyMetricsToggle: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  emptyMetricsToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  emptyMetricsList: {
+    gap: 12,
   },
 });
 
