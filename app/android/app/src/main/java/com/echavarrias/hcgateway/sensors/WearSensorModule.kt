@@ -5,6 +5,9 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.os.Build
+import android.os.SystemClock
+import android.provider.Settings
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import java.text.SimpleDateFormat
@@ -34,6 +37,7 @@ class WearSensorModule(reactContext: ReactApplicationContext) :
     
     // Chunk timing
     private var chunkStartTime = 0L
+    private var chunkStartMonoNs = 0L
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
         timeZone = TimeZone.getTimeZone("UTC")
     }
@@ -47,7 +51,7 @@ class WearSensorModule(reactContext: ReactApplicationContext) :
     fun startAccelerometer(sampleRateHz: Int, promise: Promise) {
         try {
             this.sampleRateHz = sampleRateHz
-            this.chunkDurationMs = (1000 / sampleRateHz * 250).toLong() // ~250 samples per chunk
+            this.chunkDurationMs = ((1000.0 / sampleRateHz) * 250.0).toLong() // ~250 samples per chunk
             
             if (accelerometer == null) {
                 promise.reject("NO_ACCELEROMETER", "Accelerometer sensor not available")
@@ -65,8 +69,9 @@ class WearSensorModule(reactContext: ReactApplicationContext) :
             
             if (success) {
                 isAccelerometerActive = true
-                chunkStartTime = System.currentTimeMillis()
                 accelerometerSamples.clear()
+                chunkStartTime = System.currentTimeMillis()
+                chunkStartMonoNs = SystemClock.elapsedRealtimeNanos()
                 
                 promise.resolve(true)
                 sendEvent("AccelerometerStarted", WritableNativeMap())
@@ -183,21 +188,26 @@ class WearSensorModule(reactContext: ReactApplicationContext) :
             when (sensorEvent.sensor.type) {
                 Sensor.TYPE_ACCELEROMETER -> {
                     if (isAccelerometerActive) {
-                        val timestamp = System.currentTimeMillis()
-                        val tOffsetMs = timestamp - chunkStartTime
+                        // event.timestamp is in nanoseconds since boot (monotonic)
+                        val tOffsetMs = (sensorEvent.timestamp - chunkStartMonoNs) / 1_000_000.0
+                        
+                        // Calculate wall-clock timestamp
+                        val bootTimeMs = System.currentTimeMillis() - SystemClock.elapsedRealtime()
+                        val wallClockMs = bootTimeMs + (sensorEvent.timestamp / 1_000_000L)
                         
                         val sample = AccelSample(
                             x = sensorEvent.values[0].toDouble(),
                             y = sensorEvent.values[1].toDouble(),
                             z = sensorEvent.values[2].toDouble(),
                             tOffsetMs = tOffsetMs,
-                            timestamp = timestamp
+                            timestamp = wallClockMs
                         )
                         
                         accelerometerSamples.offer(sample)
                         
                         // Send chunk when we have enough samples or time has passed
-                        if (accelerometerSamples.size >= 250 || tOffsetMs >= chunkDurationMs) {
+                        val elapsedMs = (SystemClock.elapsedRealtimeNanos() - chunkStartMonoNs) / 1_000_000
+                        if (accelerometerSamples.size >= 250 || elapsedMs >= chunkDurationMs) {
                             sendAccelerometerChunk()
                         }
                     }
@@ -205,15 +215,19 @@ class WearSensorModule(reactContext: ReactApplicationContext) :
                 
                 Sensor.TYPE_GYROSCOPE -> {
                     if (isGyroscopeActive) {
-                        val timestamp = System.currentTimeMillis()
-                        val tOffsetMs = timestamp - chunkStartTime
+                        // event.timestamp is in nanoseconds since boot (monotonic)
+                        val tOffsetMs = (sensorEvent.timestamp - chunkStartMonoNs) / 1_000_000.0
+                        
+                        // Calculate wall-clock timestamp
+                        val bootTimeMs = System.currentTimeMillis() - SystemClock.elapsedRealtime()
+                        val wallClockMs = bootTimeMs + (sensorEvent.timestamp / 1_000_000L)
                         
                         val sample = GyroSample(
                             x = sensorEvent.values[0].toDouble(),
                             y = sensorEvent.values[1].toDouble(),
                             z = sensorEvent.values[2].toDouble(),
                             tOffsetMs = tOffsetMs,
-                            timestamp = timestamp
+                            timestamp = wallClockMs
                         )
                         
                         gyroscopeSamples.offer(sample)
@@ -244,7 +258,7 @@ class WearSensorModule(reactContext: ReactApplicationContext) :
                 putDouble("x", sample.x)
                 putDouble("y", sample.y)
                 putDouble("z", sample.z)
-                putDouble("tOffsetMs", sample.tOffsetMs.toDouble())
+                putDouble("tOffsetMs", sample.tOffsetMs)
                 putString("ts", dateFormat.format(Date(sample.timestamp)))
             }
             
@@ -264,9 +278,10 @@ class WearSensorModule(reactContext: ReactApplicationContext) :
         
         sendEvent("AccelerometerChunk", chunk)
         
-        // Reset chunk timing for next chunk
+        // Reset both clocks for next chunk
         if (!isFinal) {
             chunkStartTime = System.currentTimeMillis()
+            chunkStartMonoNs = SystemClock.elapsedRealtimeNanos()
         }
     }
 
@@ -286,7 +301,7 @@ class WearSensorModule(reactContext: ReactApplicationContext) :
                 putDouble("x", sample.x)
                 putDouble("y", sample.y)
                 putDouble("z", sample.z)
-                putDouble("tOffsetMs", sample.tOffsetMs.toDouble())
+                putDouble("tOffsetMs", sample.tOffsetMs)
                 putString("ts", dateFormat.format(Date(sample.timestamp)))
             }
             
@@ -306,8 +321,9 @@ class WearSensorModule(reactContext: ReactApplicationContext) :
         
         sendEvent("GyroscopeChunk", chunk)
         
-        // Reset chunk timing for next chunk
+        // Reset both clocks for next chunk
         chunkStartTime = System.currentTimeMillis()
+        chunkStartMonoNs = SystemClock.elapsedRealtimeNanos()
     }
 
     /**
@@ -320,17 +336,21 @@ class WearSensorModule(reactContext: ReactApplicationContext) :
     }
 
     /**
-     * Get device ID
+     * Get device ID - stable per-device identifier
      */
     private fun getDeviceId(): String {
-        return android.os.Build.MODEL + "-" + android.os.Build.SERIAL
+        val androidId = Settings.Secure.getString(
+            reactApplicationContext.contentResolver,
+            Settings.Secure.ANDROID_ID
+        )
+        return "wearos-$androidId"
     }
 
     /**
-     * Get device model
+     * Get device model - human-readable device info
      */
     private fun getDeviceModel(): String {
-        return android.os.Build.MANUFACTURER + " " + android.os.Build.MODEL
+        return "${Build.MANUFACTURER} ${Build.MODEL}"
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
@@ -345,7 +365,7 @@ data class AccelSample(
     val x: Double,
     val y: Double,
     val z: Double,
-    val tOffsetMs: Long,
+    val tOffsetMs: Double,
     val timestamp: Long
 )
 
@@ -356,6 +376,6 @@ data class GyroSample(
     val x: Double,
     val y: Double,
     val z: Double,
-    val tOffsetMs: Long,
+    val tOffsetMs: Double,
     val timestamp: Long
 )

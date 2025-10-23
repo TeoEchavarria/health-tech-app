@@ -26,6 +26,7 @@ httpx==0.28.1
 idna==3.10
 jiter==0.11.0
 jmespath==1.0.1
+motor==3.6.0
 multidict==6.6.4
 openai==2.4.0
 propcache==0.3.2
@@ -36,7 +37,7 @@ pydantic==2.11.9
 pydantic-settings==2.6.1
 pydantic_core==2.33.2
 pyfcm==2.0.7
-pymongo==4.10.1
+pymongo==4.9.2
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
 python-multipart==0.0.20
@@ -57,4 +58,3 @@ uvloop==0.21.0
 watchfiles==1.1.0
 websockets==15.0.1
 yarl==1.20.1
-motor==3.3.2

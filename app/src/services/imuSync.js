@@ -363,3 +363,4 @@ export function simulateAccelerometerData(manager, durationSeconds = 10, sampleR
   
   return interval;
 }
+

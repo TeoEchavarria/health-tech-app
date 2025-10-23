@@ -17,3 +17,4 @@ class WearSensorPackage : ReactPackage {
         return emptyList()
     }
 }
+

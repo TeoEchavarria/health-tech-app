@@ -5,7 +5,7 @@ const config = {
   // Examples:
   // - For local development (Android emulator): 'http://10.0.2.2:8000'
   // - For production: 'https://api.hcgateway.shuchir.dev'
-  apiBaseUrl: 'https://apihealth.echavararas.com', //'http://10.0.2.2:8000', 
+  apiBaseUrl: 'https://apihealth.echavarrias.com', //'http://10.0.2.2:8000', 
   
   // Default sync interval in hours
   defaultSyncIntervalHours: 2,
@@ -23,7 +23,7 @@ const config = {
       HeartRate: true,        // Use /ingest/ for raw storage
       Steps: true,           // Use /ingest/ for raw storage
       Accelerometer: true,   // Use /ingest/ for accelerometer chunks
-      Distance: false,       // Keep on /sync/ for now
+      Distance: false,       //  Keep on /sync/ for now
       SleepSession: false,   // Keep on /sync/ for aggregated data
       ExerciseSession: false, // Keep on /sync/ for aggregated data
       // Add other record types as needed
