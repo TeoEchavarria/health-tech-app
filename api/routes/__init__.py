@@ -7,10 +7,12 @@ from .extract_info import router as extract_info_router
 from .personal_info import router as personal_info_router
 from .nutrition import router as nutrition_router
 from .users import router as users_router
+from .ingest import router as ingest_router
 
 def include_all_internal_routers(app: FastAPI):
     app.include_router(health_router, tags=["Health"])
     app.include_router(sync_router, prefix="/sync", tags=["Sync"])
+    app.include_router(ingest_router, prefix="/ingest", tags=["Ingest"])
     app.include_router(login_router, tags=["Login"])
     app.include_router(family_router, tags=["Family"])
     app.include_router(extract_info_router, prefix="/extract-info", tags=["Extract Info"])
