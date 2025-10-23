@@ -10,61 +10,7 @@ from pyfcm import FCMNotification
 import datetime
 from .login import verify_token
 from aggregators import aggregate_records, group_records_by_date
-
-# Canonical record types - Single source of truth
-# Must match the canonical list in app/src/types/recordTypes.js
-VALID_RECORD_TYPES = [
-    "activeCaloriesBurned",
-    "basalBodyTemperature",
-    "basalMetabolicRate",
-    "bloodGlucose",
-    "bloodPressure",
-    "bodyFat",
-    "bodyTemperature",
-    "boneMass",
-    "cervicalMucus",
-    "distance",
-    "exerciseSession",
-    "elevationGained",
-    "floorsClimbed",
-    "heartRate",
-    "height",
-    "hydration",
-    "leanBodyMass",
-    "menstruationFlow",
-    "menstruationPeriod",
-    "nutrition",
-    "ovulationTest",
-    "oxygenSaturation",
-    "power",
-    "respiratoryRate",
-    "restingHeartRate",
-    "sleepSession",
-    "speed",
-    "steps",
-    "stepsCadence",
-    "totalCaloriesBurned",
-    "vo2Max",
-    "weight",
-    "wheelchairPushes",
-]
-
-def validate_record_type(record_type: str) -> str:
-    """
-    Validate that the record type is in the canonical allow-list.
-    Accepts both camelCase (canonical) and PascalCase (Health Connect format).
-    Returns the camelCase version.
-    """
-    # Convert to camelCase if it's PascalCase
-    camel_case = record_type[0].lower() + record_type[1:] if record_type else record_type
-    
-    if camel_case not in VALID_RECORD_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid record type: '{record_type}'. Must be one of: {', '.join(VALID_RECORD_TYPES)}"
-        )
-    
-    return camel_case
+from validators import validate_record_type
 
 mongo = pymongo.MongoClient(settings.MONGO_URI)
 

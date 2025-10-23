@@ -1,6 +1,11 @@
 """
-FastAPI endpoints for raw Health Connect record ingestion with MongoDB deduplication.
-Handles both standard Health Connect records and special accelerometer chunks from Wear OS.
+FastAPI endpoints for raw Health Connect and sensor data ingestion.
+
+Supports two categories of data:
+1. Health Connect Records: Standard health/fitness data (HeartRate, Steps, etc.)
+2. Sensor Streams: Device-specific sensor data (Accelerometer, Gyroscope, etc.)
+
+All data is stored in user-specific databases (hh_{user_id}) for privacy isolation.
 """
 
 import os
@@ -15,6 +20,7 @@ from pymongo import UpdateOne
 
 from config import settings
 from .login import verify_token
+from validators import validate_record_type, is_sensor_type, get_collection_name
 
 # ---------- FastAPI router ----------
 router = APIRouter()
@@ -46,9 +52,19 @@ class AccelChunk(BaseModel):
 # ---------- Utilities ----------
 
 def collection_for(record_type: str):
-    """Get MongoDB collection for a record type."""
+    """Get MongoDB collection for a record type (DEPRECATED - use collection_for_user instead)."""
     safe = record_type.strip().lower().replace(" ", "_")
     return db[f"hc_{safe}"]
+
+def get_user_db(user_id: str):
+    """Get user-specific database (pattern: hh_{user_id})"""
+    return client[f'hh_{user_id}']
+
+def collection_for_user(user_id: str, record_type: str):
+    """Get collection in user-specific database"""
+    user_db = get_user_db(user_id)
+    coll_name = get_collection_name(record_type, is_sync_endpoint=False)
+    return user_db[coll_name]
 
 def dedupe_key(doc: Dict[str, Any], fallback_fields: Optional[List[str]] = None) -> str:
     """Generate deduplication key for a document."""
@@ -65,7 +81,7 @@ def dedupe_key(doc: Dict[str, Any], fallback_fields: Optional[List[str]] = None)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 async def ensure_core_indexes():
-    """Ensure required indexes exist for core record types."""
+    """Ensure required indexes exist for core record types (DEPRECATED - uses global DB)."""
     core_types = [
         "HeartRate",
         "SleepSession", 
@@ -87,6 +103,28 @@ async def ensure_core_indexes():
     await acc.create_index([("userId", 1), ("deviceId", 1), ("windowStart", 1)], unique=True)
     await acc.create_index([("userId", 1), ("windowEnd", 1)])
 
+async def ensure_user_indexes(user_id: str):
+    """Ensure indexes exist for a specific user's database."""
+    user_db = get_user_db(user_id)
+    
+    # Create indexes for common Health Connect types
+    # Use camelCase (canonical format)
+    common_types = ["heartRate", "sleepSession", "speed", "steps", 
+                    "distance", "activeCaloriesBurned", "totalCaloriesBurned"]
+    
+    for record_type in common_types:
+        coll_name = get_collection_name(record_type, is_sync_endpoint=False)
+        coll = user_db[coll_name]
+        # Unique by user + metadata.id when present
+        await coll.create_index([("userId", 1), ("metadata.id", 1)], unique=True, sparse=True)
+        await coll.create_index([("userId", 1), ("startTime", 1)])
+        await coll.create_index([("userId", 1), ("endTime", 1)])
+    
+    # Sensor type indexes
+    acc = user_db["imu_accelerometer_chunks"]
+    await acc.create_index([("userId", 1), ("deviceId", 1), ("windowStart", 1)], unique=True)
+    await acc.create_index([("userId", 1), ("windowEnd", 1)])
+
 # ---------- Ingest endpoints ----------
 
 @router.post("/{record_type}")
@@ -98,7 +136,7 @@ async def ingest_generic(
     """
     Ingest Health Connect records with deduplication.
     
-    Special case for IMU accelerometer chunks:
+    Special case for IMU sensor chunks:
     - When record_type == "Accelerometer", expects chunked sensor data
     - Otherwise handles standard Health Connect records
     
@@ -110,9 +148,18 @@ async def ingest_generic(
     Returns:
         Dict with ingestion results (matched, modified, upserts counts)
     """
-    # Special case for IMU accelerometer chunks
-    if record_type.strip().lower() == "accelerometer":
-        return await ingest_accelerometer(payload.data, user_id)
+    # Validate and normalize record type (allows sensors)
+    record_type = validate_record_type(record_type, allow_sensors=True)
+    
+    # Special case for IMU sensor chunks
+    if is_sensor_type(record_type):
+        if record_type == "accelerometer":
+            return await ingest_accelerometer(payload.data, user_id)
+        else:
+            raise HTTPException(
+                status_code=501,
+                detail=f"Sensor type '{record_type}' ingestion not yet implemented"
+            )
 
     # Normalize to list for bulk upsert
     items: List[Dict[str, Any]]
@@ -121,8 +168,16 @@ async def ingest_generic(
     else:
         items = payload.data
 
-    coll = collection_for(record_type)
+    # Use user-specific collection
+    coll = collection_for_user(user_id, record_type)
     now = datetime.now(timezone.utc)
+    
+    # Ensure indexes exist for this user (lazy initialization)
+    try:
+        await ensure_user_indexes(user_id)
+    except Exception as e:
+        # Don't fail the request if index creation fails
+        print(f"Warning: Failed to ensure indexes for user {user_id}: {e}")
 
     ops: List[UpdateOne] = []
     for doc in items:
@@ -178,7 +233,17 @@ async def ingest_accelerometer(raw: Union[Dict[str, Any], List[Dict[str, Any]]],
         chunks = [AccelChunk(**c) for c in raw]
 
     now = datetime.now(timezone.utc)
-    coll = db["imu_accelerometer_chunks"]
+    
+    # Use user-specific database
+    user_db = get_user_db(user_id)
+    coll = user_db["imu_accelerometer_chunks"]
+    
+    # Ensure indexes exist for this user (lazy initialization)
+    try:
+        await ensure_user_indexes(user_id)
+    except Exception as e:
+        # Don't fail the request if index creation fails
+        print(f"Warning: Failed to ensure indexes for user {user_id}: {e}")
 
     docs: List[Dict[str, Any]] = []
     for ch in chunks:

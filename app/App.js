@@ -34,6 +34,7 @@ import { diagnoseApiConnection } from './src/utils/apiDiagnostics';
 import DashboardView from './src/screens/DashboardView';
 import FamilyScreen from './src/screens/FamilyScreen';
 import NutritionDetailScreen from './src/screens/NutritionDetailScreen';
+import AccelerometerDiagnostics from './src/components/AccelerometerDiagnostics';
 
 // React Navigation imports
 import { NavigationContainer } from '@react-navigation/native';
@@ -678,6 +679,9 @@ function SettingsScreen() {
             </View>
           </View>
         )}
+
+        {/* Sensor Diagnostics */}
+        <AccelerometerDiagnostics />
 
         {/* Sync Range Card */}
         <View style={styles.card}>

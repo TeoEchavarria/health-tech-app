@@ -116,16 +116,19 @@ export function useSensorStream(sensorType, options = {}) {
     try {
       setError(null);
       
-      if (sensorType === 'accelerometer' && imuManagerRef.current) {
-        imuManagerRef.current.startStreaming();
-        setIsStreaming(true);
-        console.log('🚀 Started accelerometer streaming');
-      } else if (WearSensorModule && eventEmitter) {
-        // Start native sensor module
+      // PRIORITY 1: Use native sensor module if available
+      if (WearSensorModule && eventEmitter && sensorType === 'accelerometer') {
         await WearSensorModule.startAccelerometer(sampleRateHz);
         setIsStreaming(true);
-        console.log('🚀 Started native accelerometer streaming');
-      } else {
+        console.log('🚀 Started NATIVE accelerometer streaming');
+      } 
+      // FALLBACK: Use JS simulation (for testing without device)
+      else if (sensorType === 'accelerometer' && imuManagerRef.current) {
+        imuManagerRef.current.startStreaming();
+        setIsStreaming(true);
+        console.warn('⚠️ Started SIMULATED accelerometer (no real sensor data)');
+      } 
+      else {
         throw new Error('Sensor module not available');
       }
     } catch (err) {
@@ -137,15 +140,14 @@ export function useSensorStream(sensorType, options = {}) {
   // Stop streaming
   const stop = useCallback(async () => {
     try {
-      if (sensorType === 'accelerometer' && imuManagerRef.current) {
-        imuManagerRef.current.stopStreaming();
-        setIsStreaming(false);
-        console.log('🛑 Stopped accelerometer streaming');
-      } else if (WearSensorModule) {
-        // Stop native sensor module
+      if (WearSensorModule && sensorType === 'accelerometer') {
         await WearSensorModule.stopAccelerometer();
         setIsStreaming(false);
         console.log('🛑 Stopped native accelerometer streaming');
+      } else if (sensorType === 'accelerometer' && imuManagerRef.current) {
+        imuManagerRef.current.stopStreaming();
+        setIsStreaming(false);
+        console.log('🛑 Stopped simulated accelerometer');
       }
     } catch (err) {
       console.error('Failed to stop sensor streaming:', err);

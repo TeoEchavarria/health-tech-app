@@ -37,7 +37,7 @@ const config = {
   // Sensor configuration
   sensors: {
     accelerometer: {
-      enabled: false,        // Disable by default (Wear OS only)
+      enabled: true,         // Enable for testing sensor streaming
       sampleRateHz: 50,      // Sample rate for accelerometer
       chunkDurationMs: 5000, // 5 seconds per chunk
       autoSync: true,        // Auto-sync chunks to server
