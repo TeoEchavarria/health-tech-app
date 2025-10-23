@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HC Gateway Watch</string>
+    <string name="start_sensor">Start Sensors</string>
+    <string name="stop_sensor">Stop Sensors</string>
+    <string name="sensor_status">Status: Idle</string>
+    <string name="sensor_running">Status: Running</string>
+    <string name="sensor_stopped">Status: Stopped</string>
+    <string name="notification_title">Sensor Collection Active</string>
+    <string name="notification_text">Collecting accelerometer data</string>
+    <string name="notification_channel_name">Sensor Collection</string>
+    <string name="notification_channel_desc">Foreground service for sensor data collection</string>
+</resources>
+

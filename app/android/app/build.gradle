@@ -154,6 +154,9 @@ dependencies {
     // Health Connect SDK - required for app's Kotlin code
     implementation("androidx.health.connect:connect-client:1.1.0-alpha06")
     
+    // Wear OS Data Layer - for watch communication
+    implementation "com.google.android.gms:play-services-wearable:18.2.0"
+    
     // Google Assistant App Actions support (Modern Shortcuts Framework)
     implementation "com.google.assistant.appactions:suggestions:1.0.0"
     androidTestImplementation "com.google.assistant.appactions:testing:1.0.0"

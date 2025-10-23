@@ -84,14 +84,17 @@ export function useSensorStream(sensorType, options = {}) {
     // Listen for accelerometer chunks
     subscriptionRef.current = eventEmitter.addListener('AccelerometerChunk', async (chunkData) => {
       try {
-        setLastChunk(chunkData);
+        // Parse JSON if it comes as a string (from Wear OS Data Layer)
+        const parsedChunk = typeof chunkData === 'string' ? JSON.parse(chunkData) : chunkData;
+        
+        setLastChunk(parsedChunk);
         
         if (autoSync) {
           // Auto-sync to server
-          await ingestRecords('Accelerometer', chunkData);
+          await ingestRecords('Accelerometer', parsedChunk);
         } else if (offlineQueue && queueRef.current) {
           // Queue for later sync
-          await queueRef.current.enqueue('Accelerometer', chunkData);
+          await queueRef.current.enqueue('Accelerometer', parsedChunk);
         }
 
         // Update stats

@@ -97,6 +97,15 @@
     <meta-data android:name="io.sentry.traces.sample-rate" android:value="1.0"/>
     <service android:name="com.supersami.foregroundservice.ForegroundService" android:foregroundServiceType="dataSync"/>
     <service android:name="com.supersami.foregroundservice.ForegroundServiceTask" android:foregroundServiceType="dataSync"/>
+    <!-- Wear OS Data Layer Listener -->
+    <service
+      android:name=".wear.WearDataListenerService"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+        <data android:scheme="wear" android:host="*" android:pathPrefix="/imu" />
+      </intent-filter>
+    </service>
     <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>
