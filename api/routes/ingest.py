@@ -36,7 +36,7 @@ class Envelope(BaseModel):
 class AccelSample(BaseModel):
     # Either provide absolute timestamp `ts` OR an offset `tOffsetMs` relative to `startedAt`.
     ts: Optional[datetime] = None
-    tOffsetMs: Optional[int] = None
+    tOffsetMs: Optional[float] = None  # Changed from int to float for sub-millisecond precision
     x: float
     y: float
     z: float
