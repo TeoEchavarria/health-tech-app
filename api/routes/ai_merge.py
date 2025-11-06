@@ -28,21 +28,21 @@ VALID_AUDIO_EXTENSIONS = {
 
 @router.post("/ai-merge", response_model=TranscriptionResponse)
 async def ai_merge(
-    audio_file: UploadFile = File(..., description="Audio file to transcribe (.mpeg4, .mp3, .mp4, .wav, etc.)"),
+    file: UploadFile = File(..., description="Audio file to transcribe (.mpeg4, .mp3, .mp4, .wav, etc.)"),
 ):
     """
     Transcribe an audio file using OpenAI's transcription API.
     
     Args:
-        audio_file: Audio file to transcribe (supports mp3, mp4, mpeg, mpga, m4a, wav, webm)
+        file: Audio file to transcribe (supports mp3, mp4, mpeg, mpga, m4a, wav, webm)
     
     Returns:
         TranscriptionResponse with the transcribed text
     """
     try:
         # Validate file format
-        content_type = audio_file.content_type or ""
-        filename = audio_file.filename or ""
+        content_type = file.content_type or ""
+        filename = file.filename or ""
         
         # Check content type
         is_valid_content_type = (
@@ -62,7 +62,7 @@ async def ai_merge(
             )
         
         # Read file content
-        file_content = await audio_file.read()
+        file_content = await file.read()
         
         if not file_content:
             raise HTTPException(
@@ -71,8 +71,8 @@ async def ai_merge(
             )
         
         # Create a file-like object from bytes
-        audio_file_obj = BytesIO(file_content)
-        audio_file_obj.name = filename or "audio.mp3"
+        file_obj = BytesIO(file_content)
+        file_obj.name = filename or "audio.mp3"
         
         # Call OpenAI transcription API
         # Note: Using "whisper-1" as the standard model, but user specified "gpt-4o-transcribe"
@@ -80,15 +80,15 @@ async def ai_merge(
         try:
             transcript = client.audio.transcriptions.create(
                 model="gpt-4o-transcribe",
-                file=audio_file_obj
+                file=file_obj
             )
         except Exception as model_error:
             # If gpt-4o-transcribe is not available, try whisper-1
             if "gpt-4o-transcribe" in str(model_error).lower():
-                audio_file_obj.seek(0)  # Reset file pointer
+                file_obj.seek(0)  # Reset file pointer
                 transcript = client.audio.transcriptions.create(
                     model="whisper-1",
-                    file=audio_file_obj
+                    file=file_obj
                 )
             else:
                 raise
