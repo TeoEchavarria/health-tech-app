@@ -20,11 +20,12 @@ client = OpenAI(
 class TranscriptionResponse(BaseModel):
     text: str
 
-# Valid audio formats supported by OpenAI
+# Valid audio and video formats supported by OpenAI Whisper
 VALID_AUDIO_FORMATS = {
     'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/mpeg4',
     'audio/m4a', 'audio/wav', 'audio/webm', 'audio/mpga',
-    'audio/x-m4a', 'audio/vnd.wave'
+    'audio/x-m4a', 'audio/vnd.wave',
+    'video/mp4', 'video/webm', 'video/mpeg'
 }
 
 VALID_AUDIO_EXTENSIONS = {
@@ -34,12 +35,13 @@ VALID_AUDIO_EXTENSIONS = {
 @router.post("/ai-merge", response_model=TranscriptionResponse)
 async def ai_merge(request: Request):
     """
-    Transcribe an audio file using OpenAI's transcription API.
+    Transcribe an audio or video file using OpenAI's transcription API.
     
-    The audio file should be sent directly in the request body (Content-Type: audio/*).
+    The file should be sent directly in the request body (Content-Type: audio/* or video/*).
+    OpenAI Whisper can process both audio and video files, extracting audio from videos automatically.
     
     Args:
-        request: FastAPI Request object containing the audio file in the body
+        request: FastAPI Request object containing the audio/video file in the body
     
     Returns:
         TranscriptionResponse with the transcribed text
@@ -71,6 +73,7 @@ async def ai_merge(request: Request):
         # Check content type
         is_valid_content_type = (
             content_type.startswith('audio/') or 
+            content_type.startswith('video/') or 
             content_type in VALID_AUDIO_FORMATS
         )
         
@@ -91,6 +94,9 @@ async def ai_merge(request: Request):
                 'audio/vnd.wave': 'wav',
                 'audio/webm': 'webm',
                 'audio/mpga': 'mpga',
+                'video/mp4': 'mp4',
+                'video/webm': 'webm',
+                'video/mpeg': 'mpeg',
             }
             file_extension = content_type_to_extension.get(content_type, '')
         
@@ -104,7 +110,7 @@ async def ai_merge(request: Request):
             logger.warning(f"BAD REQUEST: Invalid file format - content_type: {content_type}, extension: {file_extension}")
             raise HTTPException(
                 status_code=400,
-                detail=f"File must be an audio file. Received content_type: {content_type}, extension: {file_extension}. "
+                detail=f"File must be an audio or video file. Received content_type: {content_type}, extension: {file_extension}. "
                        f"Supported formats: {', '.join(VALID_AUDIO_EXTENSIONS)}"
             )
         
