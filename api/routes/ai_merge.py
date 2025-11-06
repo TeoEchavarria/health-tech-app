@@ -3,6 +3,10 @@ from io import BytesIO
 from openai import OpenAI
 from config import settings
 from pydantic import BaseModel
+import logging
+
+# Configure logger
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -40,9 +44,17 @@ async def ai_merge(
         TranscriptionResponse with the transcribed text
     """
     try:
+        # Log request information
+        logger.info("=== AI Merge Request Received ===")
+        
         # Validate file format
         content_type = file.content_type or ""
         filename = file.filename or ""
+        
+        # Log file metadata
+        logger.info(f"Filename: {filename}")
+        logger.info(f"Content-Type: {content_type}")
+        logger.info(f"File headers: {dict(file.headers) if hasattr(file, 'headers') else 'N/A'}")
         
         # Check content type
         is_valid_content_type = (
@@ -54,7 +66,12 @@ async def ai_merge(
         file_extension = filename.split('.')[-1].lower() if '.' in filename else ''
         is_valid_extension = file_extension in VALID_AUDIO_EXTENSIONS
         
+        logger.info(f"File extension: {file_extension}")
+        logger.info(f"Is valid content type: {is_valid_content_type}")
+        logger.info(f"Is valid extension: {is_valid_extension}")
+        
         if not is_valid_content_type and not is_valid_extension:
+            logger.warning(f"BAD REQUEST: Invalid file format - content_type: {content_type}, extension: {file_extension}")
             raise HTTPException(
                 status_code=400,
                 detail=f"File must be an audio file. Received content_type: {content_type}, extension: {file_extension}. "
@@ -63,8 +80,12 @@ async def ai_merge(
         
         # Read file content
         file_content = await file.read()
+        file_size = len(file_content)
+        
+        logger.info(f"File size: {file_size} bytes")
         
         if not file_content:
+            logger.warning("BAD REQUEST: File is empty")
             raise HTTPException(
                 status_code=400,
                 detail="File is empty"
@@ -74,6 +95,8 @@ async def ai_merge(
         file_obj = BytesIO(file_content)
         file_obj.name = filename or "audio.mp3"
         
+        logger.info(f"Calling OpenAI transcription API with model: gpt-4o-transcribe")
+        
         # Call OpenAI transcription API
         # Note: Using "whisper-1" as the standard model, but user specified "gpt-4o-transcribe"
         # Trying gpt-4o-transcribe first, falling back to whisper-1 if not available
@@ -82,25 +105,35 @@ async def ai_merge(
                 model="gpt-4o-transcribe",
                 file=file_obj
             )
+            logger.info("Transcription successful with gpt-4o-transcribe")
         except Exception as model_error:
+            logger.warning(f"Error with gpt-4o-transcribe: {str(model_error)}")
             # If gpt-4o-transcribe is not available, try whisper-1
             if "gpt-4o-transcribe" in str(model_error).lower():
+                logger.info("Falling back to whisper-1 model")
                 file_obj.seek(0)  # Reset file pointer
                 transcript = client.audio.transcriptions.create(
                     model="whisper-1",
                     file=file_obj
                 )
+                logger.info("Transcription successful with whisper-1")
             else:
+                logger.error(f"Error in OpenAI API call: {str(model_error)}")
                 raise
         
         # Extract text from response
         transcribed_text = transcript.text
         
+        logger.info(f"Transcription completed. Text length: {len(transcribed_text)} characters")
+        logger.info("=== AI Merge Request Completed Successfully ===")
+        
         return TranscriptionResponse(text=transcribed_text)
         
-    except HTTPException:
+    except HTTPException as http_exc:
+        logger.error(f"HTTPException raised: status_code={http_exc.status_code}, detail={http_exc.detail}")
         raise
     except Exception as e:
+        logger.error(f"Unexpected error in ai_merge: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Error transcribing audio: {str(e)}"
