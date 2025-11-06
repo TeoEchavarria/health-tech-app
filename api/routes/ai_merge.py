@@ -25,11 +25,12 @@ VALID_AUDIO_FORMATS = {
     'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/mpeg4',
     'audio/m4a', 'audio/wav', 'audio/webm', 'audio/mpga',
     'audio/x-m4a', 'audio/vnd.wave',
+    'audio/aac', 'audio/x-aac', 'audio/aacp',
     'video/mp4', 'video/webm', 'video/mpeg'
 }
 
 VALID_AUDIO_EXTENSIONS = {
-    'mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'wav', 'webm'
+    'mp3', 'mp4', 'mpeg', 'mpga', 'm4a', 'wav', 'webm', 'aac'
 }
 
 @router.post("/ai-merge", response_model=TranscriptionResponse)
@@ -94,6 +95,9 @@ async def ai_merge(request: Request):
                 'audio/vnd.wave': 'wav',
                 'audio/webm': 'webm',
                 'audio/mpga': 'mpga',
+                'audio/aac': 'aac',
+                'audio/x-aac': 'aac',
+                'audio/aacp': 'aac',
                 'video/mp4': 'mp4',
                 'video/webm': 'webm',
                 'video/mpeg': 'mpeg',
