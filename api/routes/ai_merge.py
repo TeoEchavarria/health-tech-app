@@ -1,9 +1,10 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, Request, HTTPException
 from io import BytesIO
 from openai import OpenAI
 from config import settings
 from pydantic import BaseModel
 import logging
+import re
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -31,14 +32,14 @@ VALID_AUDIO_EXTENSIONS = {
 }
 
 @router.post("/ai-merge", response_model=TranscriptionResponse)
-async def ai_merge(
-    file: UploadFile = File(..., description="Audio file to transcribe (.mpeg4, .mp3, .mp4, .wav, etc.)"),
-):
+async def ai_merge(request: Request):
     """
     Transcribe an audio file using OpenAI's transcription API.
     
+    The audio file should be sent directly in the request body (Content-Type: audio/*).
+    
     Args:
-        file: Audio file to transcribe (supports mp3, mp4, mpeg, mpga, m4a, wav, webm)
+        request: FastAPI Request object containing the audio file in the body
     
     Returns:
         TranscriptionResponse with the transcribed text
@@ -46,15 +47,26 @@ async def ai_merge(
     try:
         # Log request information
         logger.info("=== AI Merge Request Received ===")
+        logger.info(f"Request URL: {request.url}")
+        logger.info(f"Request method: {request.method}")
         
-        # Validate file format
-        content_type = file.content_type or ""
-        filename = file.filename or ""
+        # Get content type from headers
+        content_type = request.headers.get("content-type", "").split(";")[0].strip()
         
-        # Log file metadata
-        logger.info(f"Filename: {filename}")
+        # Try to get filename from Content-Disposition header
+        filename = ""
+        content_disposition = request.headers.get("content-disposition", "")
+        if content_disposition:
+            # Extract filename from Content-Disposition: attachment; filename="audio.mp4"
+            filename_match = re.search(r'filename[^;=\n]*=(([\'"]).*?\2|[^;\n]*)', content_disposition)
+            if filename_match:
+                filename = filename_match.group(1).strip('"\'')
+        
+        # Log request headers
+        headers_dict = {key: value for key, value in request.headers.items()}
+        logger.info(f"Request headers: {headers_dict}")
+        logger.info(f"Filename from headers: {filename}")
         logger.info(f"Content-Type: {content_type}")
-        logger.info(f"File headers: {dict(file.headers) if hasattr(file, 'headers') else 'N/A'}")
         
         # Check content type
         is_valid_content_type = (
@@ -63,8 +75,26 @@ async def ai_merge(
         )
         
         # Check file extension as fallback
-        file_extension = filename.split('.')[-1].lower() if '.' in filename else ''
-        is_valid_extension = file_extension in VALID_AUDIO_EXTENSIONS
+        file_extension = ""
+        if filename:
+            file_extension = filename.split('.')[-1].lower() if '.' in filename else ''
+        else:
+            # Try to infer extension from content-type
+            content_type_to_extension = {
+                'audio/mpeg': 'mp3',
+                'audio/mp3': 'mp3',
+                'audio/mp4': 'mp4',
+                'audio/mpeg4': 'mpeg4',
+                'audio/m4a': 'm4a',
+                'audio/x-m4a': 'm4a',
+                'audio/wav': 'wav',
+                'audio/vnd.wave': 'wav',
+                'audio/webm': 'webm',
+                'audio/mpga': 'mpga',
+            }
+            file_extension = content_type_to_extension.get(content_type, '')
+        
+        is_valid_extension = file_extension in VALID_AUDIO_EXTENSIONS if file_extension else False
         
         logger.info(f"File extension: {file_extension}")
         logger.info(f"Is valid content type: {is_valid_content_type}")
@@ -78,8 +108,8 @@ async def ai_merge(
                        f"Supported formats: {', '.join(VALID_AUDIO_EXTENSIONS)}"
             )
         
-        # Read file content
-        file_content = await file.read()
+        # Read file content from request body
+        file_content = await request.body()
         file_size = len(file_content)
         
         logger.info(f"File size: {file_size} bytes")
@@ -93,7 +123,15 @@ async def ai_merge(
         
         # Create a file-like object from bytes
         file_obj = BytesIO(file_content)
-        file_obj.name = filename or "audio.mp3"
+        # Set filename for OpenAI API (use extension if no filename)
+        if filename:
+            file_obj.name = filename
+        elif file_extension:
+            file_obj.name = f"audio.{file_extension}"
+        else:
+            file_obj.name = "audio.mp3"  # Default fallback
+        
+        logger.info(f"Using filename for OpenAI: {file_obj.name}")
         
         logger.info(f"Calling OpenAI transcription API with model: gpt-4o-transcribe")
         
