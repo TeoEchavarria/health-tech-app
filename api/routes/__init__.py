@@ -8,7 +8,6 @@ from .personal_info import router as personal_info_router
 from .nutrition import router as nutrition_router
 from .users import router as users_router
 from .ingest import router as ingest_router
-from .ai_merge import router as ai_merge_router
 
 def include_all_internal_routers(app: FastAPI):
     app.include_router(health_router, tags=["Health"])
@@ -20,4 +19,3 @@ def include_all_internal_routers(app: FastAPI):
     app.include_router(personal_info_router, tags=["Personal Info"])
     app.include_router(nutrition_router, tags=["Nutrition"])
     app.include_router(users_router, tags=["Users"])
-    app.include_router(ai_merge_router, tags=["AI Merge"])
